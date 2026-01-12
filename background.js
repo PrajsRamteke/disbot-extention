@@ -1,6 +1,7 @@
 // ============ Configuration ============
 const SERVER_BASE_URL = 'http://localhost:8080';
 let CLIENT_ID = null;
+let EXTENSION_ID = null; // Short, memorable ID for easy identification
 let CLIENT_NAME = 'Chrome Extension';
 let USER_NAME = null;
 let isConnected = false;
@@ -9,26 +10,39 @@ const POLL_ALARM_NAME = 'pollCommands';
 const POLL_INTERVAL_MINUTES = 0.05; // ~2 seconds (minimum is 1 minute in production, but dev allows this) //change it to 2 seconds on dev 
 
 // ============ Initialize ============
-// Generate or retrieve client ID
-chrome.storage.local.get(['clientId', 'clientName', 'userName'], (result) => {
+// Generate or retrieve client ID and extension ID
+chrome.storage.local.get(['clientId', 'extensionId', 'clientName', 'userName'], (result) => {
     CLIENT_ID = result.clientId || generateClientId();
+    EXTENSION_ID = result.extensionId || generateExtensionId();
     CLIENT_NAME = result.clientName || 'Chrome Extension';
     USER_NAME = result.userName || null;
     
-    // Save client ID if it's new
-    if (!result.clientId) {
-        chrome.storage.local.set({ clientId: CLIENT_ID });
+    // Save IDs if they're new
+    if (!result.clientId || !result.extensionId) {
+        chrome.storage.local.set({ 
+            clientId: CLIENT_ID,
+            extensionId: EXTENSION_ID
+        });
     }
     
-    console.log('🔧 Extension initialized with Client ID:', CLIENT_ID);
+    console.log('🔧 Extension initialized');
+    console.log('   📱 Extension ID:', EXTENSION_ID);
+    console.log('   🔑 Client ID:', CLIENT_ID);
     
     // Start polling
     startPolling();
 });
 
-// Generate unique client ID
+// Generate unique client ID (long, for backend tracking)
 function generateClientId() {
     return 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Generate short, memorable extension ID (for easy user identification)
+function generateExtensionId() {
+    // Generate a random 2-digit number (10-99)
+    const randomNum = Math.floor(Math.random() * 90) + 10;
+    return `EXT-${randomNum}`;
 }
 
 // ============ HTTP Polling with chrome.alarms ============
@@ -77,6 +91,7 @@ async function registerClient() {
             },
             body: JSON.stringify({
                 clientId: CLIENT_ID,
+                extensionId: EXTENSION_ID,
                 name: CLIENT_NAME,
                 userName: USER_NAME
             })
@@ -573,6 +588,7 @@ async function sendCommandResponse(commandId, type, data) {
             },
             body: JSON.stringify({
                 clientId: CLIENT_ID,
+                extensionId: EXTENSION_ID,
                 commandId: commandId,
                 type: type,
                 data: data
@@ -593,7 +609,8 @@ function updatePopupStatus(connected) {
         type: 'status_update',
         connected: connected,
         serverUrl: SERVER_BASE_URL,
-        clientId: CLIENT_ID
+        clientId: CLIENT_ID,
+        extensionId: EXTENSION_ID
     }).catch(() => {
         // Popup not open, ignore
     });
@@ -607,7 +624,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 connected: isConnected,
                 serverUrl: SERVER_BASE_URL,
                 clientName: CLIENT_NAME,
-                clientId: CLIENT_ID
+                clientId: CLIENT_ID,
+                extensionId: EXTENSION_ID
             });
             break;
 

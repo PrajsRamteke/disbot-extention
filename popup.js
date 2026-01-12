@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userNameInput = document.getElementById('userName');
     const submitNameBtn = document.getElementById('submitName');
     const displayName = document.getElementById('displayName');
+    const extensionIdDisplay = document.getElementById('extensionId');
 
     // Check if user is already registered
     function checkUserRegistration() {
@@ -25,11 +26,25 @@ document.addEventListener('DOMContentLoaded', () => {
         userNameInput.focus();
     }
 
-    // Show user view with name
+    // Show user view with name and extension ID
     function showUserView(name) {
         registrationView.style.display = 'none';
         userView.style.display = 'block';
         displayName.textContent = name;
+        
+        // Get and display extension ID
+        chrome.storage.local.get(['extensionId'], (result) => {
+            if (result.extensionId) {
+                extensionIdDisplay.textContent = result.extensionId;
+            } else {
+                // Request from background script
+                chrome.runtime.sendMessage({ type: 'get_status' }, (response) => {
+                    if (response && response.extensionId) {
+                        extensionIdDisplay.textContent = response.extensionId;
+                    }
+                });
+            }
+        });
     }
 
     // Handle name submission
