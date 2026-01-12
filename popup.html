@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎮 Discord Remote</h1>
+
+        <!-- First-time user registration form -->
+        <div id="registrationView" style="display: none;">
+            <div class="form-group">
+                <label for="userName">Enter Your Name:</label>
+                <input type="text" id="userName" placeholder="Your Name" autofocus>
+            </div>
+            <button id="submitName" class="btn btn-primary full-width">Submit</button>
+        </div>
+
+        <!-- Registered user view -->
+        <div id="userView" style="display: none;">
+            <div class="info-box">
+                <p><strong>Hello, <span id="displayName"></span>!</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
