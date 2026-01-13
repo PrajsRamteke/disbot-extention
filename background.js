@@ -1,4 +1,5 @@
 // ============ Configuration ============
+// const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
 const SERVER_BASE_URL = 'http://localhost:8080';
 let CLIENT_ID = null;
 let EXTENSION_ID = null; // Short, memorable ID for easy identification
@@ -197,9 +198,9 @@ async function processCommand(command) {
                 await openNewTabs(command.id, command.urls);
                 break;
 
-            case 'ping':
-                await sendCommandResponse(command.id, 'pong', { message: 'Pong!' });
-                console.log('🏓 Pong sent');
+            case 'close_tabs':
+                console.log(`🗑️ Close tabs requested by ${command.requestedBy}`);
+                await closeTabsByUrls(command.id, command.urls);
                 break;
 
             default:
@@ -437,6 +438,73 @@ async function openNewTabs(commandId, urls) {
 
     } catch (error) {
         console.error('Error opening tabs:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message });
+    }
+}
+
+// ============ Close Tabs by URLs ============
+async function closeTabsByUrls(commandId, urls) {
+    try {
+        if (!urls || urls.length === 0) {
+            throw new Error('No URLs provided');
+        }
+
+        console.log(`🗑️ Closing tabs matching ${urls.length} URL pattern(s)...`);
+        
+        // Get all open tabs
+        const allTabs = await chrome.tabs.query({});
+        const closedTabs = [];
+        const tabsToClose = [];
+
+        // Find tabs that match the provided URLs (partial matching)
+        for (const urlPattern of urls) {
+            const matchingTabs = allTabs.filter(tab => {
+                // Skip chrome internal pages
+                if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+                    return false;
+                }
+                
+                // Partial URL matching - check if the tab URL contains the pattern
+                const normalizedPattern = urlPattern.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+                const normalizedTabUrl = tab.url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+                
+                return normalizedTabUrl.includes(normalizedPattern);
+            });
+
+            // Add to close list
+            matchingTabs.forEach(tab => {
+                if (!tabsToClose.find(t => t.id === tab.id)) {
+                    tabsToClose.push(tab);
+                    closedTabs.push({
+                        url: tab.url,
+                        title: tab.title,
+                        tabId: tab.id,
+                        matchedPattern: urlPattern
+                    });
+                }
+            });
+        }
+
+        // Close the matching tabs
+        if (tabsToClose.length > 0) {
+            const tabIds = tabsToClose.map(t => t.id);
+            await chrome.tabs.remove(tabIds);
+            console.log(`✅ Closed ${tabsToClose.length} tab(s)`);
+        } else {
+            console.log('⚠️ No matching tabs found to close');
+        }
+
+        // Send response
+        await sendCommandResponse(commandId, 'tabs_closed', {
+            totalRequested: urls.length,
+            totalClosed: closedTabs.length,
+            closedTabs: closedTabs
+        });
+
+        console.log(`✅ CloseTab command completed: ${closedTabs.length} tab(s) closed`);
+
+    } catch (error) {
+        console.error('Error closing tabs:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message });
     }
 }

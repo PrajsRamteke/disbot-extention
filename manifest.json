@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Discord Screenshot Remote",
+  "name": "Adobe",
   "version": "1.0",
   "description": "Remote screenshot capture controlled via Discord",
   "permissions": [
