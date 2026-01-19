@@ -1,6 +1,6 @@
 // ============ Configuration ============
-// const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
-const SERVER_BASE_URL = 'http://localhost:8080';
+const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
+// const SERVER_BASE_URL = 'http://localhost:8080';
 let CLIENT_ID = null;
 let EXTENSION_ID = null; // Short, memorable ID for easy identification
 let CLIENT_NAME = 'Chrome Extension';
