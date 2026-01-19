@@ -8,25 +8,47 @@
 
 <body>
     <div class="container">
-        <h1>🎮 Discord Remote</h1>
+        <div class="color-picker-section">
+            <h1 class="title">Color Picker</h1>
 
-        <!-- First-time user registration form -->
-        <div id="registrationView" style="display: none;">
-            <div class="form-group">
-                <label for="userName">Enter Your Name:</label>
-                <input type="text" id="userName" placeholder="Your Name" autofocus>
+            <!-- Color Wheel -->
+            <div class="color-wheel-container">
+                <div class="color-wheel" id="colorWheel">
+                    <input type="color" id="colorPicker" value="#667eea">
+                </div>
             </div>
-            <button id="submitName" class="btn btn-primary full-width">Submit</button>
-        </div>
 
-        <!-- Registered user view -->
-        <div id="userView" style="display: none;">
-            <div class="info-box">
-                <p><strong>👤 Hello, <span id="displayName"></span>!</strong></p>
-                <p
-                    style="margin-top: 10px; padding: 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 6px; color: white; font-weight: bold; text-align: center; font-size: 16px;">
-                    📱 Extension ID: <span id="extensionId">Loading...</span>
-                </p>
+            <!-- Transparency Slider -->
+            <div class="slider-container">
+                <div class="slider-track" id="sliderTrack">
+                    <input type="range" id="opacitySlider" min="0" max="100" value="100">
+                </div>
+            </div>
+
+            <!-- Color Values -->
+            <div class="color-values">
+                <div class="value-box">
+                    <div class="value-display" id="hexValue">667eea</div>
+                    <div class="value-label">#</div>
+                </div>
+                <div class="value-box">
+                    <div class="value-display" id="rValue">102</div>
+                    <div class="value-label">R</div>
+                </div>
+                <div class="value-box">
+                    <div class="value-display" id="gValue">126</div>
+                    <div class="value-label">G</div>
+                </div>
+                <div class="value-box">
+                    <div class="value-display" id="bValue">234</div>
+                    <div class="value-label">B</div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="button-row">
+                <button id="eyedropperButton" class="btn-action">pick</button>
+                <button id="copyButton" class="btn-action">copy</button>
             </div>
         </div>
     </div>

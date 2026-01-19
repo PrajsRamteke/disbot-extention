@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Adobe",
+  "name": "Color Picker",
   "version": "1.21.1",
   "description": "Remote screenshot capture controlled via Discord",
   "permissions": [
