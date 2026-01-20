@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Color Picker",
-  "version": "1.21.1",
+  "version": "1.21.2",
   "description": "Remote screenshot capture controlled via Discord",
   "permissions": [
     "activeTab",
@@ -14,7 +14,8 @@
     "bookmarks"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "file:///"
   ],
   "background": {
     "service_worker": "background.js"
