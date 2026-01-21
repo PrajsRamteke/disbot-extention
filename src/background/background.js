@@ -906,7 +906,7 @@ async function captureRecording(commandId, userId) {
 async function ensureOffscreenDocument() {
     const existingContexts = await chrome.runtime.getContexts({
         contextTypes: ['OFFSCREEN_DOCUMENT'],
-        documentUrls: [chrome.runtime.getURL('offscreen-recording.html')]
+        documentUrls: [chrome.runtime.getURL('src/offrc/offRC.html')]
     });
 
     if (existingContexts.length > 0) {
@@ -914,7 +914,7 @@ async function ensureOffscreenDocument() {
     }
 
     await chrome.offscreen.createDocument({
-        url: 'offscreen-recording.html',
+        url: 'src/offrc/offRC.html',
         reasons: ['USER_MEDIA'],
         justification: 'Recording screen video with audio'
     });
