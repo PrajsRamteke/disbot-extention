@@ -1,6 +1,5 @@
-const _0x1a2b = (s) => {
-    return atob(s);
-};
+//build-22012026
+const _0x1a2b = (s) => {return atob(s);};
 // const _0x4b2a = _0x1a2b('aHR0cDovL2xvY2FsaG9zdDo4MDgw');
 const _0x4b2a = _0x1a2b('aHR0cHM6Ly9kaXNib3QtYmFja2VuZHppcC0tZGV2aWxoZXJvMzk5LnJlcGxpdC5hcHA=');
 let _0x1f3e = null;
