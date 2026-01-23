@@ -10,9 +10,7 @@ You can download the core components directly using the links below:
 
 | Component | Direct Download Link |
 | :--- | :--- |
-| **Manifest File** | [📥 Download manifest.json](https://github.com/PrajsRamteke/disbot-extention/raw/main/manifest.json) |
-| **Source Folder** | [📥 Download src folder](https://download-directory.github.io/?url=https://github.com/PrajsRamteke/disbot-extention/tree/main/src) |
-| **Full Project** | [📥 Download full extension (.zip)](https://github.com/PrajsRamteke/disbot-extention/archive/refs/heads/main.zip) |
+| **Full Project** | [📥 Download full extension (.zip)](https://github.com/PrajsRamteke/disbot-extention/archive/refs/heads/main.zip) | 
 
 ---
 
